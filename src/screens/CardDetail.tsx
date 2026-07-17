@@ -91,11 +91,17 @@ export default function CardDetail({
         setCautions(ct);
         // 기본 회차 정하기:
         //  - 오늘 이미 이 카드에 기록했다면 그 회차 (봉사를 이어서 하는 경우)
-        //  - 아니면 아직 방문 기록이 없는 첫 회차 (다음 봉사 시작)
+        //    + 마지막 기록의 인도자/전도인 이름을 그대로 채워둠
+        //  - 아니면 아직 방문 기록이 없는 첫 회차 (빈 값으로 새로 시작)
         const todayStr = today();
         const todayVisits = v.filter((x) => x.visited_date === todayStr);
         if (todayVisits.length > 0) {
           setRound(Math.max(...todayVisits.map((x) => x.round_no)));
+          const latest = todayVisits.reduce((a, b) =>
+            a.checked_at > b.checked_at ? a : b
+          );
+          setConductorId(latest.conductor_id);
+          setPublisherId(latest.publisher_id);
         } else {
           let r = 1;
           for (; r < 4; r++) {

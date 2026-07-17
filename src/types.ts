@@ -48,6 +48,7 @@ export interface VisitRecord {
   conductor_id: string;
   publisher_id: string;
   visited_date: string;
+  checked_at: string; // 체크한 시각 (같은 카드에 다시 들어올 때 마지막 기록 찾기용)
 }
 
 export interface CardAssignment {

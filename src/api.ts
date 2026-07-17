@@ -94,7 +94,7 @@ export async function fetchUnits(cardId: string): Promise<TerritoryUnit[]> {
 export async function fetchVisits(cardId: string): Promise<VisitRecord[]> {
   const { data, error } = await supabase
     .from("visit_records")
-    .select("id, unit_id, round_no, conductor_id, publisher_id, visited_date, territory_units!inner(card_id)")
+    .select("id, unit_id, round_no, conductor_id, publisher_id, visited_date, checked_at, territory_units!inner(card_id)")
     .eq("territory_units.card_id", cardId);
   return must(data as unknown as VisitRecord[], error);
 }
@@ -117,7 +117,7 @@ export async function addVisit(v: {
   const { data, error } = await supabase
     .from("visit_records")
     .insert(v)
-    .select("id, unit_id, round_no, conductor_id, publisher_id, visited_date")
+    .select("id, unit_id, round_no, conductor_id, publisher_id, visited_date, checked_at")
     .single();
   return must(data, error);
 }
