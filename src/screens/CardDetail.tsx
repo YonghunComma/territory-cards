@@ -89,14 +89,20 @@ export default function CardDetail({
         setConductors(cs);
         setPublishers(ps);
         setCautions(ct);
-        // 기본 회차 = 아직 다 돌지 않은 첫 회차
-        const total = u.length;
-        let r = 1;
-        for (; r < 4; r++) {
-          const done = v.filter((x) => x.round_no === r).length;
-          if (done < total) break;
+        // 기본 회차 정하기:
+        //  - 오늘 이미 이 카드에 기록했다면 그 회차 (봉사를 이어서 하는 경우)
+        //  - 아니면 아직 방문 기록이 없는 첫 회차 (다음 봉사 시작)
+        const todayStr = today();
+        const todayVisits = v.filter((x) => x.visited_date === todayStr);
+        if (todayVisits.length > 0) {
+          setRound(Math.max(...todayVisits.map((x) => x.round_no)));
+        } else {
+          let r = 1;
+          for (; r < 4; r++) {
+            if (!v.some((x) => x.round_no === r)) break;
+          }
+          setRound(r);
         }
-        setRound(r);
         setLoading(false);
       } catch (e) {
         if (alive) {
@@ -122,8 +128,8 @@ export default function CardDetail({
     return m;
   }, [cautions]);
 
-  const roundDone = (r: number) =>
-    units.length > 0 && visits.filter((v) => v.round_no === r).length >= units.length;
+  // 한 집이라도 방문 기록이 있으면 그 회차는 '방문완료' (✓ 표시)
+  const roundDone = (r: number) => visits.some((v) => v.round_no === r);
 
   const assignment = assignments.find((a) => a.round_no === round);
   const assignedName = assignment

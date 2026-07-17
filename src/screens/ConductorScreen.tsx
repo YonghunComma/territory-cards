@@ -37,18 +37,19 @@ export default function ConductorScreen() {
     load();
   }, []);
 
-  // 현재 회차: 모든 카드가 아직 끝나지 않은 가장 낮은 회차
+  // 카드는 한 집이라도 방문 기록이 있으면 그 회차를 '방문완료'로 본다.
+  // 현재 회차 = 기록이 하나도 없는 카드가 아직 남아있는 가장 낮은 회차
   const currentRound = useMemo(() => {
     for (let r = 1; r <= 4; r++) {
-      const incomplete = progress.some(
-        (p) => p.total_units > 0 && roundVisited(p, r) < p.total_units
+      const untouched = progress.some(
+        (p) => p.total_units > 0 && roundVisited(p, r) === 0
       );
-      if (incomplete) return r;
+      if (untouched) return r;
     }
     return 4;
   }, [progress]);
 
-  // 추천: 현재 회차에서 아직 시작도 안 했고 배정도 안 된, 번호가 가장 낮은 카드들
+  // 추천: 현재 회차에서 아직 방문 기록이 없고 배정도 안 된, 번호가 가장 낮은 카드들
   const recommended = useMemo(
     () =>
       progress.filter(
@@ -60,11 +61,11 @@ export default function ConductorScreen() {
     [progress, currentRound]
   );
 
-  // 현재 회차에서 아직 완료되지 않은 모든 카드 (순서대로)
+  // 현재 회차에서 아직 방문 기록이 없는 모든 카드 (순서대로)
   const remaining = useMemo(
     () =>
       progress.filter(
-        (p) => p.total_units > 0 && roundVisited(p, currentRound) < p.total_units
+        (p) => p.total_units > 0 && roundVisited(p, currentRound) === 0
       ),
     [progress, currentRound]
   );
@@ -80,8 +81,8 @@ export default function ConductorScreen() {
   function roundChip(p: CardProgress, r: number) {
     const visited = roundVisited(p, r);
     const pub = roundPublisher(p, r);
-    const done = p.total_units > 0 && visited >= p.total_units;
-    const cls = done ? "done" : visited > 0 || pub ? "doing" : "";
+    // 한 집이라도 방문 기록이 있으면 완료(초록), 배정만 된 상태면 진행중(노랑)
+    const cls = visited > 0 ? "done" : pub ? "doing" : "";
     return (
       <span key={r} className={`round-chip ${cls}`}>
         {r}회 {visited}/{p.total_units}
@@ -203,7 +204,7 @@ export default function ConductorScreen() {
           {recommended.slice(0, 10).map((p) => cardRow(p, currentRound))}
 
           <div className="section-title">
-            {currentRound}회차 미완료 카드 전체 ({remaining.length}개)
+            {currentRound}회차에 아직 방문 안 한 카드 ({remaining.length}개)
           </div>
           {remaining.slice(0, 100).map((p) => cardRow(p))}
           {remaining.length > 100 && (

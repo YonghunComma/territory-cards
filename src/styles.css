@@ -216,6 +216,15 @@ input, select {
   border-radius: 8px;
   flex-shrink: 0;
 }
+.done-badge {
+  font-size: var(--fs-small);
+  background: var(--c-ok);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  font-weight: 700;
+}
 .caution-badge.soft { background: #b7791f; }
 .unit-caution-btn {
   background: #eef1f4;
