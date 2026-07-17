@@ -31,3 +31,8 @@ export async function getCardSummaries(): Promise<CardSummary[]> {
   if (!cardsCache) cardsCache = await fetchCardSummaries();
   return cardsCache;
 }
+
+/** 관리자가 집을 추가/삭제하면 카드 집수가 바뀌므로 캐시를 비움 */
+export function invalidateCardsCache(): void {
+  cardsCache = null;
+}

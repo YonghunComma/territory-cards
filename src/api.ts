@@ -161,6 +161,34 @@ export async function resetCard(cardId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// ---- 구역관리자 전용: 카드의 집 편집 (DB 함수가 번호 재매김까지 처리) ----
+
+export async function adminUpdateUnitAddress(unitId: string, address: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_update_unit_address", {
+    p_unit_id: unitId,
+    p_address: address,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function adminDeleteUnit(unitId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_delete_unit", { p_unit_id: unitId });
+  if (error) throw new Error(error.message);
+}
+
+export async function adminInsertUnit(
+  cardId: string,
+  afterSeq: number,
+  address: string
+): Promise<void> {
+  const { error } = await supabase.rpc("admin_insert_unit", {
+    p_card_id: cardId,
+    p_after_seq: afterSeq,
+    p_address: address,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** 로그인한 계정이 관리자(conductors.is_admin)로 연결되어 있는지 */
 export async function fetchIsAdmin(): Promise<boolean> {
   const { data: userData } = await supabase.auth.getUser();

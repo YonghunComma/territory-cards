@@ -3,6 +3,7 @@ import { resetCard } from "../api";
 import { getCardSummaries } from "../lists";
 import type { CardSummary } from "../types";
 import { displayNo } from "../types";
+import UnitEditor from "./UnitEditor";
 
 export default function AdminScreen() {
   const [cards, setCards] = useState<CardSummary[]>([]);
@@ -10,12 +11,43 @@ export default function AdminScreen() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editCard, setEditCard] = useState<CardSummary | null>(null);
+
+  async function loadCards() {
+    try {
+      setCards(await getCardSummaries());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   useEffect(() => {
-    getCardSummaries()
-      .then(setCards)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    loadCards();
   }, []);
+
+  // 뒤로가기(쓸어넘기기)로 편집 화면에서 카드 목록으로 복귀
+  useEffect(() => {
+    function onPop() {
+      setEditCard(null);
+      loadCards(); // 편집으로 집수가 바뀌었을 수 있으므로 다시 읽음
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function openEditor(c: CardSummary) {
+    setEditCard(c);
+    window.history.pushState({ editorOpen: true }, "");
+  }
+
+  function closeEditor() {
+    if (window.history.state && window.history.state.editorOpen) {
+      window.history.back();
+    } else {
+      setEditCard(null);
+      loadCards();
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim();
@@ -50,11 +82,15 @@ export default function AdminScreen() {
     setBusyId(null);
   }
 
+  if (editCard) {
+    return <UnitEditor card={editCard} onBack={closeEditor} />;
+  }
+
   return (
     <div>
       <div className="notice">
-        초기화하면 해당 카드의 1~4회차 방문 체크와 배정 기록이 모두 지워집니다.
-        집 주소와 주의사항은 그대로 유지됩니다.
+        <b>편집</b>: 집 주소 수정, 삭제, 사이에 추가 / <b>초기화</b>: 1~4회차
+        방문 기록과 배정 삭제 (집 주소·주의사항은 유지)
       </div>
       <div className="field">
         <label>카드 검색</label>
@@ -71,12 +107,15 @@ export default function AdminScreen() {
         <div key={c.id} className="card-item">
           <span className="card-no">{displayNo(c)}</span>
           <span className="name">{c.name}</span>
+          <button className="btn-line" onClick={() => openEditor(c)}>
+            편집
+          </button>
           <button
             className="btn-danger"
             disabled={busyId === c.id}
             onClick={() => doReset(c)}
           >
-            {busyId === c.id ? "초기화 중..." : "초기화"}
+            {busyId === c.id ? "..." : "초기화"}
           </button>
         </div>
       ))}
