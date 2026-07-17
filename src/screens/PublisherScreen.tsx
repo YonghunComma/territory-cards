@@ -62,15 +62,17 @@ export default function PublisherScreen() {
       </div>
       {filtered.slice(0, 100).map((c) => {
         const pg = progressMap.get(c.id);
-        const visited = pg ? roundVisited(pg, currentRound) : 0;
+        // 회차별 완료 = 그 회차에 인도자·전도인 이름과 함께 기록된 방문이 있음
+        // (이름 없이는 체크가 저장되지 않으므로 기록 존재 = 이름도 기록됨)
+        const doneRounds = pg
+          ? [1, 2, 3, 4].filter((r) => roundVisited(pg, r) > 0)
+          : [];
         return (
           <button key={c.id} className="card-item" onClick={() => setSelected(c)}>
             <span className="card-no">{displayNo(c)}</span>
             <span className="name">{c.name}</span>
-            {visited > 0 ? (
-              <span className="done-badge">
-                방문완료 {visited}/{c.total_units}
-              </span>
+            {doneRounds.length > 0 ? (
+              <span className="done-badge">{doneRounds.join("·")}회 방문완료</span>
             ) : (
               <span className="units">{c.total_units}집</span>
             )}
