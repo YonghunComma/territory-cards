@@ -13,9 +13,11 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [tab, setTab] = useState<Tab>("publisher");
-  const [bigFont, setBigFont] = useState(
-    () => localStorage.getItem("fontMode") === "big"
-  );
+  const [fontLevel, setFontLevel] = useState(() => {
+    const saved = Number(localStorage.getItem("fontLevel"));
+    if (saved >= 1 && saved <= 5) return saved;
+    return localStorage.getItem("fontMode") === "big" ? 4 : 2;
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -35,12 +37,25 @@ export default function App() {
     setTab("publisher");
   }, [session?.user.email]);
 
-  function toggleFont() {
-    const next = !bigFont;
-    setBigFont(next);
-    document.documentElement.classList.toggle("big", next);
-    localStorage.setItem("fontMode", next ? "big" : "normal");
+  function changeFont(delta: number) {
+    const next = Math.min(5, Math.max(1, fontLevel + delta));
+    if (next === fontLevel) return;
+    document.documentElement.classList.remove("font-" + fontLevel);
+    document.documentElement.classList.add("font-" + next);
+    setFontLevel(next);
+    localStorage.setItem("fontLevel", String(next));
   }
+
+  const fontButtons = (
+    <>
+      <button onClick={() => changeFont(-1)} disabled={fontLevel <= 1} aria-label="글씨 작게">
+        가−
+      </button>
+      <button onClick={() => changeFont(1)} disabled={fontLevel >= 5} aria-label="글씨 크게">
+        가＋
+      </button>
+    </>
+  );
 
   if (!CONFIG_OK) {
     return (
@@ -62,7 +77,7 @@ export default function App() {
       <>
         <header className="header">
           <h1>구역카드</h1>
-          <button onClick={toggleFont}>{bigFont ? "일반 글씨" : "큰 글씨"}</button>
+          {fontButtons}
         </header>
         <Login />
       </>
@@ -76,7 +91,7 @@ export default function App() {
     <>
       <header className="header">
         <h1>구역카드</h1>
-        <button onClick={toggleFont}>{bigFont ? "일반 글씨" : "큰 글씨"}</button>
+        {fontButtons}
         <button onClick={() => supabase.auth.signOut()}>로그아웃</button>
       </header>
 

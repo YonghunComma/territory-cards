@@ -5,6 +5,7 @@ import {
   adminUpdateUnitAddress,
   fetchUnits,
   fetchVisits,
+  setUnitNote,
 } from "../api";
 import { invalidateCardsCache } from "../lists";
 import type { CardSummary, TerritoryUnit } from "../types";
@@ -125,11 +126,12 @@ export default function UnitEditor({
                 <span style={{ whiteSpace: "pre-wrap" }}>
                   <span className="unit-addr">{u.address_unit}</span>
                   {visits > 0 && <div className="unit-meta">방문 기록 {visits}건</div>}
+                  {u.note && <div className="unit-meta">📝 {u.note}</div>}
                 </span>
               </button>
             </div>
             {isSel && selectedUnit && (
-              <div className="row" style={{ margin: "0 0 8px 0" }}>
+              <div className="row" style={{ margin: "0 0 8px 0", flexWrap: "wrap" }}>
                 <button
                   className="btn-line"
                   style={{ flex: 1 }}
@@ -154,6 +156,20 @@ export default function UnitEditor({
                 >
                   아래에 추가
                 </button>
+                {selectedUnit.note && (
+                  <button
+                    className="btn-line"
+                    style={{ flexBasis: "100%", color: "var(--c-ok)", borderColor: "var(--c-ok)" }}
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!window.confirm(`메모를 삭제(반영 완료)할까요?\n"${selectedUnit.note}"`)) return;
+                      setSelected(null);
+                      await run(() => setUnitNote(selectedUnit.id, null));
+                    }}
+                  >
+                    메모 반영 완료 (삭제)
+                  </button>
+                )}
               </div>
             )}
           </div>

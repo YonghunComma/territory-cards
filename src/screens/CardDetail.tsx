@@ -6,6 +6,7 @@ import {
   fetchVisits,
   removeVisit,
   setUnitCaution,
+  setUnitNote,
 } from "../api";
 import { getCautionTypes, getConductors, getPublishers } from "../lists";
 import type {
@@ -47,7 +48,13 @@ export default function CardDetail({
   const [publisherId, setPublisherId] = useState("");
   const [date, setDate] = useState(today());
   const [cautionUnit, setCautionUnit] = useState<TerritoryUnit | null>(null);
+  const [memoText, setMemoText] = useState("");
   const [busyUnit, setBusyUnit] = useState<string | null>(null);
+
+  function openCautionModal(u: TerritoryUnit) {
+    setCautionUnit(u);
+    setMemoText(u.note ?? "");
+  }
 
   // 회차에 맞게 인도자/전도인 칸 채우기:
   // 그 회차에 기록이 있으면 마지막 기록의 이름으로, 없으면 빈 값으로 초기화
@@ -206,6 +213,22 @@ export default function CardDetail({
           u.id === cautionUnit.id ? { ...u, caution_type_id: cautionTypeId } : u
         )
       );
+      // 메모를 이어서 쓸 수 있도록 창은 열어둔 채 선택 상태만 갱신
+      setCautionUnit({ ...cautionUnit, caution_type_id: cautionTypeId });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setCautionUnit(null);
+    }
+  }
+
+  async function saveMemo() {
+    if (!cautionUnit) return;
+    const value = memoText.trim() === "" ? null : memoText.trim();
+    try {
+      await setUnitNote(cautionUnit.id, value);
+      setUnits((us) =>
+        us.map((u) => (u.id === cautionUnit.id ? { ...u, note: value } : u))
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -321,6 +344,7 @@ export default function CardDetail({
                     {publishers.find((p) => p.id === visit.publisher_id)?.name ?? ""}
                   </div>
                 )}
+                {u.note && <div className="unit-meta">📝 {u.note}</div>}
               </span>
             </button>
             {caution && (
@@ -328,7 +352,7 @@ export default function CardDetail({
                 {caution.label}
               </span>
             )}
-            <button className="unit-caution-btn" onClick={() => setCautionUnit(u)}>
+            <button className="unit-caution-btn" onClick={() => openCautionModal(u)}>
               ⚠
             </button>
           </div>
@@ -339,8 +363,9 @@ export default function CardDetail({
         <div className="modal-back" onClick={() => setCautionUnit(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>
-              {cautionUnit.seq_no}. {cautionUnit.address_unit} 주의사항
+              {cautionUnit.seq_no}. {cautionUnit.address_unit}
             </h3>
+            <div className="muted" style={{ marginBottom: 6 }}>주의사항 (누르면 바로 저장됩니다)</div>
             {cautions.map((c) => (
               <button
                 key={c.id}
@@ -356,7 +381,28 @@ export default function CardDetail({
             <button className="choice-btn" onClick={() => changeCaution(null)}>
               주의사항 없음 (해제)
             </button>
-            <button className="btn-primary" onClick={() => setCautionUnit(null)}>
+
+            <div className="field" style={{ marginTop: 14 }}>
+              <label>📝 메모 (상호 변경 등 관리자에게 알릴 내용)</label>
+              <textarea
+                value={memoText}
+                rows={3}
+                onChange={(e) => setMemoText(e.target.value)}
+                placeholder="예: 상호가 '커피천국'으로 바뀜"
+                style={{
+                  width: "100%",
+                  fontFamily: "inherit",
+                  fontSize: "var(--fs-base)",
+                  padding: "10px 12px",
+                  border: "1px solid var(--c-border)",
+                  borderRadius: 10,
+                }}
+              />
+            </div>
+            <button className="btn-primary" onClick={saveMemo}>
+              메모 저장하고 닫기
+            </button>
+            <button className="choice-btn" style={{ marginTop: 8 }} onClick={() => setCautionUnit(null)}>
               닫기
             </button>
           </div>

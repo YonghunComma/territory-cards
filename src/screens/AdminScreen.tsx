@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { resetCard } from "../api";
+import { fetchMemoUnits, resetCard, setUnitNote } from "../api";
+import type { MemoUnit } from "../api";
 import { getCardSummaries } from "../lists";
 import type { CardSummary } from "../types";
 import { displayNo } from "../types";
@@ -7,6 +8,7 @@ import UnitEditor from "./UnitEditor";
 
 export default function AdminScreen() {
   const [cards, setCards] = useState<CardSummary[]>([]);
+  const [memos, setMemos] = useState<MemoUnit[]>([]);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -15,7 +17,9 @@ export default function AdminScreen() {
 
   async function loadCards() {
     try {
-      setCards(await getCardSummaries());
+      const [cs, ms] = await Promise.all([getCardSummaries(), fetchMemoUnits()]);
+      setCards(cs);
+      setMemos(ms);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -24,6 +28,21 @@ export default function AdminScreen() {
   useEffect(() => {
     loadCards();
   }, []);
+
+  async function resolveMemo(m: MemoUnit) {
+    if (
+      !window.confirm(
+        `${m.territory_cards.legacy_number ?? "?"}번 카드 ${m.seq_no}번 집의 메모를 삭제(반영 완료)할까요?\n"${m.note}"`
+      )
+    )
+      return;
+    try {
+      await setUnitNote(m.id, null);
+      setMemos((ms) => ms.filter((x) => x.id !== m.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   // 뒤로가기(쓸어넘기기)로 편집 화면에서 카드 목록으로 복귀
   useEffect(() => {
@@ -92,6 +111,38 @@ export default function AdminScreen() {
         <b>편집</b>: 집 주소 수정, 삭제, 사이에 추가 / <b>초기화</b>: 1~4회차
         방문 기록과 배정 삭제 (집 주소·주의사항은 유지)
       </div>
+
+      {memos.length > 0 && (
+        <>
+          <div className="section-title">📝 봉사자 메모 ({memos.length}건)</div>
+          {memos.map((m) => {
+            const cardSummary = cards.find((c) => c.id === m.card_id);
+            return (
+              <div key={m.id} className="card-box" style={{ padding: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  {m.territory_cards.legacy_number ?? "?"}번 {m.territory_cards.name} —{" "}
+                  {m.seq_no}. {m.address_unit}
+                </div>
+                <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>📝 {m.note}</div>
+                <div className="row">
+                  {cardSummary && (
+                    <button className="btn-line" style={{ flex: 1 }} onClick={() => openEditor(cardSummary)}>
+                      카드 편집
+                    </button>
+                  )}
+                  <button
+                    className="btn-line"
+                    style={{ flex: 1, color: "var(--c-ok)", borderColor: "var(--c-ok)" }}
+                    onClick={() => resolveMemo(m)}
+                  >
+                    반영 완료 (메모 삭제)
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
       <div className="field">
         <label>카드 검색</label>
         <input

@@ -135,6 +135,34 @@ export async function setUnitCaution(unitId: string, cautionTypeId: number | nul
   if (error) throw new Error(error.message);
 }
 
+/** 봉사자 메모 저장/삭제 (빈 문자열이면 삭제) */
+export async function setUnitNote(unitId: string, note: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("territory_units")
+    .update({ note: note && note.trim() !== "" ? note.trim() : null })
+    .eq("id", unitId);
+  if (error) throw new Error(error.message);
+}
+
+/** 메모가 남아있는 집 전체 (관리자 '메모 모아보기'용) */
+export interface MemoUnit {
+  id: string;
+  card_id: string;
+  seq_no: number;
+  address_unit: string;
+  note: string;
+  territory_cards: { legacy_number: number | null; name: string };
+}
+
+export async function fetchMemoUnits(): Promise<MemoUnit[]> {
+  const { data, error } = await supabase
+    .from("territory_units")
+    .select("id, card_id, seq_no, address_unit, note, territory_cards(legacy_number, name)")
+    .not("note", "is", null)
+    .range(0, 499);
+  return must(data as unknown as MemoUnit[], error);
+}
+
 export async function assignCard(a: {
   card_id: string;
   round_no: number;
