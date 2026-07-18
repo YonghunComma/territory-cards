@@ -74,6 +74,17 @@ export interface CardProgress {
   r3_publisher: string | null;
   r4_publisher: string | null;
   last_visited_date: string | null;
+  r1_first_date?: string | null;
+  r2_first_date?: string | null;
+  r3_first_date?: string | null;
+  r4_first_date?: string | null;
+}
+
+/** 선택 회차의 첫 방문일 (patch4 적용 전에는 undefined일 수 있음) */
+export function roundFirstDate(p: CardProgress, round: number): string | null {
+  return (
+    [p.r1_first_date, p.r2_first_date, p.r3_first_date, p.r4_first_date][round - 1] ?? null
+  );
 }
 
 export function roundVisited(p: CardProgress, round: number): number {

@@ -2,9 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import { assignCard, fetchCardProgress, unassignCard } from "../api";
 import { getConductors, getPublishers } from "../lists";
 import type { CardProgress, Conductor, Publisher } from "../types";
-import { displayNo, roundPublisher, roundVisited } from "../types";
+import { displayNo, roundFirstDate, roundPublisher, roundVisited } from "../types";
 
 type AssignTarget = { card: CardProgress; round: number };
+
+/** '2026-04-11' -> '26. 4. 11' */
+function fmtDate(d: string | null): string {
+  if (!d) return "";
+  const [y, m, day] = d.split("-");
+  return `${y.slice(2)}. ${Number(m)}. ${Number(day)}`;
+}
+
+function rateClass(pct: number): string {
+  if (pct <= 0) return "rate-0";
+  if (pct < 30) return "rate-low";
+  if (pct < 60) return "rate-mid";
+  return "rate-high";
+}
 
 export default function ConductorScreen() {
   const [progress, setProgress] = useState<CardProgress[]>([]);
@@ -16,6 +30,7 @@ export default function ConductorScreen() {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [target, setTarget] = useState<AssignTarget | null>(null);
+  const [tableRound, setTableRound] = useState<number | null>(null); // 전체 현황 표의 회차
 
   async function load() {
     try {
@@ -213,32 +228,97 @@ export default function ConductorScreen() {
         </div>
       )}
 
-      {view === "all" && (
-        <div>
-          <div className="field">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="카드 번호 또는 구역 이름 검색"
-            />
+      {view === "all" && (() => {
+        const r = tableRound ?? currentRound;
+        const rows = filtered;
+        const withUnits = rows.filter((p) => p.total_units > 0);
+        const avg =
+          withUnits.length > 0
+            ? withUnits.reduce(
+                (s, p) => s + (100 * roundVisited(p, r)) / p.total_units,
+                0
+              ) / withUnits.length
+            : 0;
+        const doneCount = withUnits.filter((p) => roundVisited(p, r) > 0).length;
+        return (
+          <div>
+            <div className="round-tabs">
+              {[1, 2, 3, 4].map((n) => (
+                <button
+                  key={n}
+                  className={r === n ? "active" : ""}
+                  onClick={() => setTableRound(n)}
+                >
+                  {n}회
+                </button>
+              ))}
+            </div>
+            <div className="field">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="카드 번호 또는 구역 이름 검색"
+              />
+            </div>
+            <div className="muted" style={{ marginBottom: 8 }}>
+              {r}회차 · 방문완료 {doneCount}/{withUnits.length}개 · 평균 방문율{" "}
+              <b>{avg.toFixed(2)}%</b> · 행을 누르면 배정할 수 있습니다
+            </div>
+            <table className="prog-table">
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>구역명</th>
+                  <th>가구</th>
+                  <th>호별일자</th>
+                  <th>전도인</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 200).map((p) => {
+                  const visited = roundVisited(p, r);
+                  const pct =
+                    p.total_units > 0 ? (100 * visited) / p.total_units : 0;
+                  return (
+                    <tr key={p.card_id} onClick={() => setTarget({ card: p, round: r })}>
+                      <td style={{ fontWeight: 700, color: "var(--c-primary)" }}>
+                        {displayNo(p)}
+                      </td>
+                      <td className="tname">{p.name}</td>
+                      <td>{p.total_units}</td>
+                      <td>{fmtDate(roundFirstDate(p, r))}</td>
+                      <td>{roundPublisher(p, r) ?? ""}</td>
+                      <td className={rateClass(pct)}>{pct.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {rows.length > 200 && (
+              <div className="muted" style={{ marginTop: 8 }}>
+                200개까지만 표시됩니다. 검색으로 좁혀 주세요.
+              </div>
+            )}
           </div>
-          {filtered.slice(0, 100).map((p) => cardRow(p))}
-          {filtered.length > 100 && (
-            <div className="muted">100개까지만 표시됩니다. 검색으로 좁혀 주세요.</div>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {target && (
         <AssignModal
           target={target}
+          existingPublisher={roundPublisher(target.card, target.round)}
           conductors={conductors}
           publishers={publishers}
           onClose={() => setTarget(null)}
           onDone={(publisherName) => {
             patchProgress(target.card.card_id, target.round, publisherName);
             setTarget(null);
+          }}
+          onUnassign={() => {
+            setTarget(null);
+            doUnassign(target.card, target.round);
           }}
           onError={setError}
         />
@@ -249,17 +329,21 @@ export default function ConductorScreen() {
 
 function AssignModal({
   target,
+  existingPublisher,
   conductors,
   publishers,
   onClose,
   onDone,
+  onUnassign,
   onError,
 }: {
   target: AssignTarget;
+  existingPublisher: string | null;
   conductors: Conductor[];
   publishers: Publisher[];
   onClose: () => void;
   onDone: (publisherName: string) => void;
+  onUnassign: () => void;
   onError: (msg: string) => void;
 }) {
   const [publisherId, setPublisherId] = useState("");
@@ -292,6 +376,12 @@ function AssignModal({
         <h3>
           {displayNo(target.card)}번 {target.card.name} — {target.round}회차 배정
         </h3>
+        {existingPublisher && (
+          <div className="notice">
+            현재 <b>{existingPublisher}</b> 님에게 배정되어 있습니다. 다른 사람을
+            선택하면 재배정됩니다.
+          </div>
+        )}
         <div className="field">
           <label>전도인 (카드를 받을 사람)</label>
           <select value={publisherId} onChange={(e) => setPublisherId(e.target.value)}>
@@ -319,8 +409,18 @@ function AssignModal({
           disabled={busy || !publisherId || !conductorId}
           onClick={submit}
         >
-          {busy ? "배정 중..." : "배정하기"}
+          {busy ? "배정 중..." : existingPublisher ? "재배정하기" : "배정하기"}
         </button>
+        {existingPublisher && (
+          <button
+            className="choice-btn danger"
+            style={{ marginTop: 8 }}
+            disabled={busy}
+            onClick={onUnassign}
+          >
+            배정 회수 (배정 취소)
+          </button>
+        )}
         <button className="choice-btn" style={{ marginTop: 8 }} onClick={onClose}>
           취소
         </button>

@@ -280,3 +280,32 @@ input, select {
 .choice-btn.selected { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
 
 .loading { text-align: center; padding: 40px 0; color: var(--c-muted); }
+
+/* ---------- 인도자 전체 현황 표 ---------- */
+.prog-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: var(--fs-small);
+}
+.prog-table th {
+  background: var(--c-primary);
+  color: #fff;
+  padding: 8px 4px;
+  border: 1px solid var(--c-primary-dark);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.prog-table td {
+  border: 1px solid var(--c-border);
+  padding: 8px 4px;
+  text-align: center;
+  vertical-align: middle;
+}
+.prog-table td.tname { text-align: left; word-break: keep-all; overflow-wrap: anywhere; font-weight: 600; }
+.prog-table tr { cursor: pointer; }
+.prog-table tr:active { background: #eef4fb; }
+.rate-0    { background: #eceff1; color: var(--c-muted); }
+.rate-low  { background: #e53935; color: #fff; font-weight: 700; }
+.rate-mid  { background: #fbc02d; color: #5d4300; font-weight: 700; }
+.rate-high { background: #43a047; color: #fff; font-weight: 700; }
