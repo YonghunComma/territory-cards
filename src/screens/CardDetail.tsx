@@ -57,8 +57,10 @@ export default function CardDetail({
   }
 
   // 회차에 맞게 인도자/전도인 칸 채우기:
-  // 그 회차에 기록이 있으면 마지막 기록의 이름으로, 없으면 빈 값으로 초기화
-  function prefillForRound(r: number, vs: VisitRecord[]) {
+  //  1) 그 회차에 방문 기록이 있으면 -> 마지막 기록의 이름
+  //  2) 기록은 없지만 인도자가 배정해둔 회차면 -> 배정한 인도자 + 배정받은 전도인
+  //  3) 둘 다 없으면 -> 빈 값
+  function prefillForRound(r: number, vs: VisitRecord[], asg: CardAssignment[]) {
     const roundVisits = vs.filter((x) => x.round_no === r);
     if (roundVisits.length > 0) {
       const latest = roundVisits.reduce((a, b) =>
@@ -67,15 +69,21 @@ export default function CardDetail({
       setConductorId(latest.conductor_id);
       setPublisherId(latest.publisher_id);
     } else {
-      setConductorId("");
-      setPublisherId("");
+      const assigned = asg.find((x) => x.round_no === r);
+      if (assigned) {
+        setConductorId(assigned.assigned_by);
+        setPublisherId(assigned.publisher_id);
+      } else {
+        setConductorId("");
+        setPublisherId("");
+      }
     }
     setDate(today());
   }
 
   function changeRound(r: number) {
     setRound(r);
-    prefillForRound(r, visits);
+    prefillForRound(r, visits, assignments);
   }
 
   // 방문 기록/배정만 다시 불러오기 (다른 사람이 체크한 내용 반영)
@@ -119,22 +127,31 @@ export default function CardDetail({
         setPublishers(ps);
         setCautions(ct);
         // 기본 회차 정하기:
-        //  - 오늘 이미 이 카드에 기록했다면 그 회차 (봉사를 이어서 하는 경우)
-        //  - 아니면 아직 방문 기록이 없는 첫 회차
-        // 이름 칸은 선택된 회차의 기록 기준으로 채우거나 비움
+        //  1) 오늘 이미 이 카드에 기록했다면 그 회차 (봉사를 이어서 하는 경우)
+        //  2) 인도자가 배정해뒀는데 아직 기록이 없는 회차가 있으면 그 회차
+        //     (1회차 배정이면 1회차, 2회차 배정이면 2회차가 바로 열림)
+        //  3) 아니면 아직 방문 기록이 없는 첫 회차
         const todayStr = today();
         const todayVisits = v.filter((x) => x.visited_date === todayStr);
         let chosen: number;
         if (todayVisits.length > 0) {
           chosen = Math.max(...todayVisits.map((x) => x.round_no));
         } else {
-          chosen = 1;
-          for (; chosen < 4; chosen++) {
-            if (!v.some((x) => x.round_no === chosen)) break;
+          const assignedNoVisit = a
+            .filter((x) => !v.some((vv) => vv.round_no === x.round_no))
+            .map((x) => x.round_no)
+            .sort((x, y) => x - y)[0];
+          if (assignedNoVisit) {
+            chosen = assignedNoVisit;
+          } else {
+            chosen = 1;
+            for (; chosen < 4; chosen++) {
+              if (!v.some((x) => x.round_no === chosen)) break;
+            }
           }
         }
         setRound(chosen);
-        prefillForRound(chosen, v);
+        prefillForRound(chosen, v, a);
         setLoading(false);
       } catch (e) {
         if (alive) {
