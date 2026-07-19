@@ -61,15 +61,12 @@ export default function CardDetail({
   }, [card.id]);
 
   // 네이버 길찾기: 왕국회관(노은서로142번길 20) -> 이 카드의 도착점
+  // 최신 형식 .../출발/도착/-/car -> '자동차' 경로가 기본으로 선택됨
   function openDirections() {
     if (!dest) return;
-    const url =
-      "https://m.map.naver.com/route.nhn?menu=route" +
-      "&sname=" + encodeURIComponent("왕국회관") +
-      "&sx=127.3160871&sy=36.3738521" +
-      "&ename=" + encodeURIComponent(dest.label) +
-      "&ex=" + dest.lng + "&ey=" + dest.lat +
-      "&pathType=1&showMap=true";
+    const start = `127.3160871,36.3738521,${encodeURIComponent("왕국회관")}`;
+    const end = `${dest.lng},${dest.lat},${encodeURIComponent(dest.label)}`;
+    const url = `https://map.naver.com/p/directions/${start}/${end}/-/car`;
     window.open(url, "_blank");
   }
 
