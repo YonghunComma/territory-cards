@@ -56,11 +56,18 @@ export default function PublisherScreen() {
 
   const filtered = useMemo(() => {
     const q = query.trim();
-    if (!q) return cards;
-    return cards.filter(
-      (c) => (c.legacy_number !== null && String(c.legacy_number).includes(q)) || c.name.includes(q)
-    );
-  }, [cards, query]);
+    // 검색 중에는 전체 카드에서 찾기 (완료 카드도 열어볼 수 있게)
+    if (q) {
+      return cards.filter(
+        (c) => (c.legacy_number !== null && String(c.legacy_number).includes(q)) || c.name.includes(q)
+      );
+    }
+    // 검색이 없으면: 현재 회차에 아직 방문 안 한 카드만 순서대로 (완료 카드는 숨김)
+    return cards.filter((c) => {
+      const pg = progressMap.get(c.id);
+      return !pg || roundVisited(pg, currentRound) === 0;
+    });
+  }, [cards, query, progressMap, currentRound]);
 
   if (selected) {
     // key로 카드가 바뀔 때마다 화면을 완전히 새로 그림 (이전 입력값이 남지 않도록)
@@ -82,7 +89,9 @@ export default function PublisherScreen() {
       </div>
       {error && <div className="error-msg">{error}</div>}
       <div className="muted" style={{ marginBottom: 8 }}>
-        {filtered.length}개 카드 · 지금은 {currentRound}회차
+        {query.trim()
+          ? `검색 결과 ${filtered.length}개`
+          : `${currentRound}회차 방문할 카드 ${filtered.length}개 (완료 카드는 검색으로)`}
       </div>
       {filtered.map((c) => {
         const pg = progressMap.get(c.id);
