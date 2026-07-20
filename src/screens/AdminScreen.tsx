@@ -154,7 +154,7 @@ export default function AdminScreen() {
       </div>
       {message && <div className="notice">{message}</div>}
       {error && <div className="error-msg">{error}</div>}
-      {filtered.slice(0, 50).map((c) => (
+      {filtered.map((c) => (
         <div key={c.id} className="card-item">
           <span className="card-no">{displayNo(c)}</span>
           <span className="name">{c.name}</span>
@@ -170,9 +170,6 @@ export default function AdminScreen() {
           </button>
         </div>
       ))}
-      {filtered.length > 50 && (
-        <div className="muted">50개까지만 표시됩니다. 검색으로 좁혀 주세요.</div>
-      )}
     </div>
   );
 }

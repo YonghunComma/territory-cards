@@ -165,10 +165,7 @@ export default function ConductorScreen() {
           <div className="section-title">
             {currentRound}회차에 아직 방문 안 한 카드 ({remaining.length}개)
           </div>
-          {remaining.slice(0, 100).map((p) => simpleCardRow(p))}
-          {remaining.length > 100 && (
-            <div className="muted">100개까지만 표시됩니다.</div>
-          )}
+          {remaining.map((p) => simpleCardRow(p))}
         </div>
       )}
 
@@ -221,7 +218,7 @@ export default function ConductorScreen() {
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 200).map((p) => {
+                {rows.map((p) => {
                   const visited = roundVisited(p, r);
                   const pct =
                     p.total_units > 0 ? (100 * visited) / p.total_units : 0;
@@ -240,11 +237,6 @@ export default function ConductorScreen() {
                 })}
               </tbody>
             </table>
-            {rows.length > 200 && (
-              <div className="muted" style={{ marginTop: 8 }}>
-                200개까지만 표시됩니다. 검색으로 좁혀 주세요.
-              </div>
-            )}
           </div>
         );
       })()}

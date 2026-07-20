@@ -84,7 +84,7 @@ export default function PublisherScreen() {
       <div className="muted" style={{ marginBottom: 8 }}>
         {filtered.length}개 카드 · 지금은 {currentRound}회차
       </div>
-      {filtered.slice(0, 100).map((c) => {
+      {filtered.map((c) => {
         const pg = progressMap.get(c.id);
         // 회차별 완료 = 그 회차에 인도자·전도인 이름과 함께 기록된 방문이 있음
         // (이름 없이는 체크가 저장되지 않으므로 기록 존재 = 이름도 기록됨)
@@ -103,9 +103,6 @@ export default function PublisherScreen() {
           </button>
         );
       })}
-      {filtered.length > 100 && (
-        <div className="muted">100개까지만 표시됩니다. 검색으로 좁혀 주세요.</div>
-      )}
     </div>
   );
 }
