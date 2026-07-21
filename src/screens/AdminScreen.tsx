@@ -14,6 +14,7 @@ export default function AdminScreen() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editCard, setEditCard] = useState<CardSummary | null>(null);
+  const [editFocus, setEditFocus] = useState<string | null>(null); // 편집 시 이동할 집 id
   const [resettingAll, setResettingAll] = useState(false);
   const [showAll, setShowAll] = useState(false); // 카드 목록 전체보기
 
@@ -81,8 +82,9 @@ export default function AdminScreen() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  function openEditor(c: CardSummary) {
+  function openEditor(c: CardSummary, focusUnitId?: string) {
     setEditCard(c);
+    setEditFocus(focusUnitId ?? null);
     window.history.pushState({ editorOpen: true }, "");
   }
 
@@ -129,7 +131,7 @@ export default function AdminScreen() {
   }
 
   if (editCard) {
-    return <UnitEditor card={editCard} onBack={closeEditor} />;
+    return <UnitEditor card={editCard} onBack={closeEditor} focusUnitId={editFocus} />;
   }
 
   return (
@@ -162,7 +164,7 @@ export default function AdminScreen() {
                 <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>📝 {m.note}</div>
                 <div className="row">
                   {cardSummary && (
-                    <button className="btn-line" style={{ flex: 1 }} onClick={() => openEditor(cardSummary)}>
+                    <button className="btn-line" style={{ flex: 1 }} onClick={() => openEditor(cardSummary, m.id)}>
                       카드 편집
                     </button>
                   )}

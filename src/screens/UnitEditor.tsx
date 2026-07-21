@@ -19,9 +19,11 @@ type ModalState =
 export default function UnitEditor({
   card,
   onBack,
+  focusUnitId,
 }: {
   card: CardSummary;
   onBack: () => void;
+  focusUnitId?: string | null;
 }) {
   const [units, setUnits] = useState<TerritoryUnit[]>([]);
   const [visitCountByUnit, setVisitCountByUnit] = useState<Map<string, number>>(new Map());
@@ -46,14 +48,27 @@ export default function UnitEditor({
   useEffect(() => {
     reload()
       .then((u) => {
-        // 처음 열 때만 동(그룹)을 모두 접어둠 (편집 중 새로고침에는 유지)
+        const groups = buildGroups(u);
+        // 메모로 지목된 집이 속한 동은 펼쳐두고, 나머지 동은 접어둠
+        const focusKey = focusUnitId
+          ? groups.find((b) => b.items.some((it) => it.unit.id === focusUnitId))?.key
+          : undefined;
         setCollapsed(
           new Set(
-            buildGroups(u)
-              .filter((b) => b.group !== null)
+            groups
+              .filter((b) => b.group !== null && b.key !== focusKey)
               .map((b) => b.key)
           )
         );
+        // 그 집을 선택 표시 + 화면 이동
+        if (focusUnitId) {
+          setSelected(focusUnitId);
+          setTimeout(() => {
+            document
+              .getElementById("ue-" + focusUnitId)
+              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 250);
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -155,7 +170,7 @@ export default function UnitEditor({
                 const isSel = selected === u.id;
                 const visits = visitCountByUnit.get(u.id) ?? 0;
                 return (
-                  <div key={u.id}>
+                  <div key={u.id} id={"ue-" + u.id}>
                     <div
                       className="unit-row"
                       style={isSel ? { borderColor: "var(--c-primary)", borderWidth: 2 } : undefined}
