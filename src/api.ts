@@ -250,36 +250,25 @@ export async function cardExists(legacyNumber: number): Promise<boolean> {
   return (data ?? []).length > 0;
 }
 
-/** 새 카드 + 집들을 추가 (엑셀에서 파싱한 결과) */
-export async function addCard(card: {
-  legacy_number: number | null;
-  name: string;
-  source_file: string;
-  start_point_url: string | null;
-  units: string[]; // 순서대로 번지·호수
-}): Promise<void> {
-  const { data, error } = await supabase
-    .from("territory_cards")
-    .insert({
-      legacy_number: card.legacy_number,
-      name: card.name,
-      source_file: card.source_file,
-      start_point_url: card.start_point_url,
-    })
-    .select("id")
-    .single();
+/** 새 카드를 지정 번호 위치에 끼워넣기 (그 번호부터 뒤 카드는 +1로 밀림). DB 함수가 원자적으로 처리 */
+export async function insertCardAt(
+  position: number,
+  card: { name: string; source_file: string; start_point_url: string | null; units: string[] }
+): Promise<void> {
+  const { error } = await supabase.rpc("admin_insert_card_at", {
+    p_position: position,
+    p_name: card.name,
+    p_source: card.source_file,
+    p_start_url: card.start_point_url,
+    p_units: card.units,
+  });
   if (error) throw new Error(error.message);
-  const cardId = (data as { id: string }).id;
-  const rows = card.units.map((addr, i) => ({
-    card_id: cardId,
-    seq_no: i + 1,
-    address_unit: addr,
-  }));
-  // 500개씩 나눠 삽입
-  for (let i = 0; i < rows.length; i += 500) {
-    const { error: e2 } = await supabase.from("territory_units").insert(rows.slice(i, i + 500));
-    if (e2) throw new Error(e2.message);
-  }
+}
+
+/** 카드 삭제 (집·방문기록·배정 함께 삭제, 뒤 번호는 -1로 당김) */
+export async function deleteCard(cardId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_delete_card", { p_card_id: cardId });
+  if (error) throw new Error(error.message);
 }
 
 // ---- 구역관리자 전용: 카드의 집 편집 (DB 함수가 번호 재매김까지 처리) ----

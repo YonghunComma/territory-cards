@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  addCard,
-  cardExists,
+  deleteCard,
   fetchMemoUnits,
+  insertCardAt,
   resetAllCards,
   resetCard,
   setUnitNote,
@@ -29,8 +29,11 @@ export default function AdminScreen() {
   const [showAll, setShowAll] = useState(false); // 카드 목록 전체보기
   const [showNames, setShowNames] = useState(false); // 명단 관리 화면
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{ parsed: ParsedCard; file: File; exists: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ parsed: ParsedCard; file: File } | null>(null);
+  const [insertPos, setInsertPos] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
+
+  const maxLegacy = cards.reduce((m, c) => Math.max(m, c.legacy_number ?? 0), 0);
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -44,8 +47,8 @@ export default function AdminScreen() {
         setError("이 파일에서 집(번지·호수)을 찾지 못했습니다. 형식을 확인해 주세요.");
         return;
       }
-      const exists = parsed.legacy_number != null && (await cardExists(parsed.legacy_number));
-      setPreview({ parsed, file, exists });
+      setInsertPos(String(parsed.legacy_number ?? maxLegacy + 1));
+      setPreview({ parsed, file });
     } catch (err) {
       setError("엑셀을 읽지 못했습니다: " + (err instanceof Error ? err.message : String(err)));
     }
@@ -53,19 +56,23 @@ export default function AdminScreen() {
 
   async function doUpload() {
     if (!preview) return;
+    const pos = parseInt(insertPos, 10);
+    if (!pos || pos < 1) {
+      setError("끼워넣을 번호를 올바르게 입력해 주세요.");
+      return;
+    }
     setUploadBusy(true);
     setError("");
     try {
-      await addCard({
-        legacy_number: preview.parsed.legacy_number,
+      await insertCardAt(pos, {
         name: preview.parsed.name,
-        source_file: "upload/" + preview.file.name,
+        source_file: "upload/" + Date.now() + "_" + preview.file.name,
         start_point_url: preview.parsed.start_point_url,
         units: preview.parsed.units,
       });
       invalidateCardsCache();
       setMessage(
-        `${preview.parsed.legacy_number ?? "?"}번 ${preview.parsed.name} 카드가 추가되었습니다 (${preview.parsed.units.length}집).`
+        `${pos}번 자리에 '${preview.parsed.name}' 카드가 추가되었습니다 (${preview.parsed.units.length}집). 뒤 카드 번호가 밀렸습니다.`
       );
       setPreview(null);
       loadCards();
@@ -73,6 +80,32 @@ export default function AdminScreen() {
       setError("업로드 실패: " + (e instanceof Error ? e.message : String(e)));
     }
     setUploadBusy(false);
+  }
+
+  async function doDeleteCard(c: CardSummary) {
+    setError("");
+    setMessage("");
+    const warn =
+      c.total_units > 0
+        ? `\n집 ${c.total_units}개와 이 카드의 모든 방문 기록·배정이 함께 삭제됩니다.`
+        : "";
+    if (
+      !window.confirm(
+        `${displayNo(c)}번 ${c.name} 카드를 삭제할까요?${warn}\n뒤 카드 번호가 앞으로 당겨집니다.`
+      )
+    )
+      return;
+    if (!window.confirm("정말 삭제합니까? 되돌릴 수 없습니다.")) return;
+    setBusyId(c.id);
+    try {
+      await deleteCard(c.id);
+      invalidateCardsCache();
+      setMessage(`${displayNo(c)}번 ${c.name} 카드가 삭제되었습니다.`);
+      loadCards();
+    } catch (e) {
+      setError("삭제 실패: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setBusyId(null);
   }
 
   async function doResetAll() {
@@ -239,17 +272,21 @@ export default function AdminScreen() {
                 <tr><td style={{ padding: 4 }}>시작점 링크</td><td style={{ padding: 4 }}>{preview.parsed.start_point_url ? "있음" : "없음"}</td></tr>
               </tbody>
             </table>
-            {preview.exists && (
-              <div className="error-msg">
-                ⚠ {preview.parsed.legacy_number}번 카드가 이미 있습니다. 그대로 추가하면
-                같은 번호가 2개가 됩니다. 기존 카드를 먼저 정리하거나, 확인 후 진행하세요.
-              </div>
-            )}
+            <div className="field">
+              <label>끼워넣을 번호 (이 번호부터 뒤 카드가 밀립니다)</label>
+              <input
+                type="number"
+                value={insertPos}
+                onChange={(e) => setInsertPos(e.target.value)}
+                inputMode="numeric"
+              />
+            </div>
             <div className="notice" style={{ fontSize: "var(--fs-small)" }}>
-              처음 집 3개: {preview.parsed.units.slice(0, 3).map((u) => u.replace(/\n/g, " ")).join(" / ")}
+              {insertPos}번 자리에 넣으면 기존 {insertPos}번부터 뒤 카드가 한 칸씩 밀립니다.
+              <br />처음 집 3개: {preview.parsed.units.slice(0, 3).map((u) => u.replace(/\n/g, " ")).join(" / ")}
             </div>
             <button className="btn-primary" disabled={uploadBusy} onClick={doUpload}>
-              {uploadBusy ? "추가 중..." : "이 카드 추가하기"}
+              {uploadBusy ? "추가 중..." : `${insertPos}번 자리에 추가하기`}
             </button>
             <button className="choice-btn" style={{ marginTop: 8 }} onClick={() => setPreview(null)}>
               취소
@@ -304,19 +341,32 @@ export default function AdminScreen() {
       {message && <div className="notice">{message}</div>}
       {error && <div className="error-msg">{error}</div>}
       {(showAll ? filtered : filtered.slice(0, 50)).map((c) => (
-        <div key={c.id} className="card-item">
-          <span className="card-no">{displayNo(c)}</span>
-          <span className="name">{c.name}</span>
-          <button className="btn-line" onClick={() => openEditor(c)}>
-            편집
-          </button>
-          <button
-            className="btn-danger"
-            disabled={busyId === c.id}
-            onClick={() => doReset(c)}
-          >
-            {busyId === c.id ? "..." : "초기화"}
-          </button>
+        <div key={c.id} className="card-box" style={{ padding: 10 }}>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <span className="card-no">{displayNo(c)}</span>
+            <span className="name" style={{ flex: 1 }}>{c.name}</span>
+          </div>
+          <div className="row">
+            <button className="btn-line" style={{ flex: 1 }} onClick={() => openEditor(c)}>
+              편집
+            </button>
+            <button
+              className="btn-danger"
+              style={{ flex: 1 }}
+              disabled={busyId === c.id}
+              onClick={() => doReset(c)}
+            >
+              {busyId === c.id ? "..." : "초기화"}
+            </button>
+            <button
+              className="btn-danger"
+              style={{ flex: 1, background: "#7a1f1f" }}
+              disabled={busyId === c.id}
+              onClick={() => doDeleteCard(c)}
+            >
+              삭제
+            </button>
+          </div>
         </div>
       ))}
       {!showAll && filtered.length > 50 && (
