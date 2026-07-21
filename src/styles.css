@@ -133,6 +133,18 @@ input, select {
 .row { display: flex; gap: 8px; align-items: center; }
 .field { margin-bottom: 12px; }
 .field label { display: block; font-weight: 600; margin-bottom: 6px; }
+/* 읽기 전용 표시칸 (배정된 인도자/전도인 이름 — 봉사자는 수정 불가) */
+.readonly-box {
+  min-height: var(--tap-h);
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: #eef1f4;
+  color: var(--c-text);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
 .error-msg { background: var(--c-danger-bg); color: var(--c-danger); padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
 .notice { background: var(--c-warn-bg); padding: 10px 12px; border-radius: 10px; margin: 10px 0; font-size: var(--fs-small); }
 

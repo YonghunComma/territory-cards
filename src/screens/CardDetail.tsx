@@ -245,7 +245,7 @@ export default function CardDetail({
       return;
     }
     if (!conductorId || !publisherId) {
-      setError("먼저 위에서 인도자와 전도인 이름을 선택해 주세요.");
+      setError("이 카드는 배정된 봉사인도자·전도인이 없습니다. 인도자에게 배정을 요청하세요.");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -300,6 +300,9 @@ export default function CardDetail({
 
   const visitedCount = visitByUnit.size;
   const pct = units.length > 0 ? Math.round((100 * visitedCount) / units.length) : 0;
+  // 배정으로 채워진 이름 (봉사자는 수정 불가, 읽기 전용 표시)
+  const conductorName = conductors.find((c) => c.id === conductorId)?.name ?? "";
+  const publisherName = publishers.find((p) => p.id === publisherId)?.name ?? "";
 
   return (
     <div>
@@ -344,31 +347,11 @@ export default function CardDetail({
         )}
         <div className="field">
           <label>봉사 인도자</label>
-          <select
-            value={conductorId}
-            onChange={(e) => setConductorId(e.target.value)}
-          >
-            <option value="">— 선택 —</option>
-            {conductors.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="readonly-box">{conductorName || "— 배정 없음 —"}</div>
         </div>
         <div className="field">
           <label>전도인 (내 이름)</label>
-          <select
-            value={publisherId}
-            onChange={(e) => setPublisherId(e.target.value)}
-          >
-            <option value="">— 선택 —</option>
-            {publishers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <div className="readonly-box">{publisherName || "— 배정 없음 —"}</div>
         </div>
         <div className="field">
           <label>호별일자</label>
