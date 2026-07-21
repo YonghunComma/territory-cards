@@ -60,10 +60,10 @@ export default function CardDetail({
     fetchCardStartPoint(card.id).then(setStartUrl).catch(() => setStartUrl(null));
   }, [card.id]);
 
-  // 엑셀 A6에 넣어둔 카카오맵 시작점(kko.to)을 새 창으로 연다.
-  // 카카오맵에서 그 지점이 표시되고 '길찾기'로 바로 안내받을 수 있다.
+  // 엑셀 A6에 넣어둔 카카오맵 시작점(kko.to)으로 이동한다.
+  // 새 창을 열지 않고 같은 창에서 열며, 카카오맵에서 뒤로가기로 앱에 돌아온다.
   function openStartPoint() {
-    if (startUrl) window.open(startUrl, "_blank");
+    if (startUrl) window.location.href = startUrl;
   }
 
   function toggleGroup(key: string) {
