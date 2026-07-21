@@ -376,7 +376,6 @@ function AssignModal({
             value={pubQuery}
             onChange={(e) => setPubQuery(e.target.value)}
             placeholder="이름 또는 초성 (예: ㄱㅅㅊ)"
-            autoFocus
           />
           <div
             style={{
