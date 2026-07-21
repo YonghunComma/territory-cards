@@ -13,6 +13,26 @@ function fmtDate(d: string | null): string {
   return `${y.slice(2)}. ${Number(m)}. ${Number(day)}`;
 }
 
+// 이름 검색: 부분 일치 또는 초성(ㄱㅅㅊ) 일치
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+function chosungOf(s: string): string {
+  let out = "";
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      out += CHO[Math.floor((code - 0xac00) / 588)];
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+function matchName(name: string, q: string): boolean {
+  const query = q.trim();
+  if (!query) return true;
+  return name.includes(query) || chosungOf(name).includes(query);
+}
+
 function rateClass(pct: number): string {
   if (pct <= 0) return "rate-0";
   if (pct < 30) return "rate-low";
@@ -306,10 +326,13 @@ function AssignModal({
   onError: (msg: string) => void;
 }) {
   const [publisherId, setPublisherId] = useState("");
+  const [pubQuery, setPubQuery] = useState("");
   const [conductorId, setConductorId] = useState(
     () => localStorage.getItem("lastAssignerId") ?? ""
   );
   const [busy, setBusy] = useState(false);
+  const filteredPubs = publishers.filter((p) => matchName(p.name, pubQuery));
+  const selectedPubName = publishers.find((p) => p.id === publisherId)?.name;
 
   async function submit() {
     if (!publisherId || !conductorId) return;
@@ -342,15 +365,42 @@ function AssignModal({
           </div>
         )}
         <div className="field">
-          <label>전도인 (카드를 받을 사람)</label>
-          <select value={publisherId} onChange={(e) => setPublisherId(e.target.value)}>
-            <option value="">— 선택 —</option>
-            {publishers.map((p) => (
-              <option key={p.id} value={p.id}>
+          <label>
+            전도인 (카드를 받을 사람)
+            {selectedPubName && (
+              <span style={{ color: "var(--c-primary)" }}> — 선택: {selectedPubName}</span>
+            )}
+          </label>
+          <input
+            type="text"
+            value={pubQuery}
+            onChange={(e) => setPubQuery(e.target.value)}
+            placeholder="이름 또는 초성 (예: ㄱㅅㅊ)"
+            autoFocus
+          />
+          <div
+            style={{
+              maxHeight: 220,
+              overflowY: "auto",
+              border: "1px solid var(--c-border)",
+              borderRadius: 10,
+              marginTop: 6,
+            }}
+          >
+            {filteredPubs.length === 0 && (
+              <div className="muted" style={{ padding: 10 }}>검색 결과가 없습니다</div>
+            )}
+            {filteredPubs.map((p) => (
+              <button
+                key={p.id}
+                className={`choice-btn ${publisherId === p.id ? "selected" : ""}`}
+                style={{ marginBottom: 0, borderRadius: 0, border: "none", borderBottom: "1px solid var(--c-border)" }}
+                onClick={() => setPublisherId(p.id)}
+              >
                 {p.name}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         <div className="field">
           <label>배정하는 인도자 (내 이름)</label>
