@@ -305,23 +305,26 @@ export async function deleteCard(cardId: string): Promise<void> {
 
 // ---- 순회 방문용 서류(구역 배정 기록) 보고서 ----
 
+export interface CircuitRoundCell {
+  publisher: string | null; // 배정된 전도인
+  date: string | null; // 기간 내 그 회차 마지막 방문일
+}
 export interface CircuitRow {
   legacy_number: number | null;
   name: string;
-  publisher: string | null;
-  completed_date: string | null; // 기간 내 마지막 방문일
+  rounds: CircuitRoundCell[]; // [1회, 2회, 3회, 4회]
 }
 export interface CircuitReportData {
   total: number;
   firstDate: string | null; // 기간 내 가장 이른 방문일
   lastDate: string | null;
-  completedCount: number;
+  completedCount: number; // 기간 내 방문 있는 카드(회차 무관, 중복 제외)
+  completedByRound: number[]; // 회차별 완료 카드 수 [1,2,3,4]
   rows: CircuitRow[];
 }
 
-/** 시작~끝 기간의 구역 배정/완료 현황을 집계 */
+/** 시작~끝 기간의 구역 배정/완료 현황을 회차별로 집계 */
 export async function buildCircuitReport(start: string, end: string): Promise<CircuitReportData> {
-  // 1) 카드
   const { data: cardsData, error: e1 } = await supabase
     .from("territory_cards")
     .select("id, legacy_number, name")
@@ -330,12 +333,12 @@ export async function buildCircuitReport(start: string, end: string): Promise<Ci
   if (e1) throw new Error(e1.message);
   const cards = (cardsData ?? []) as { id: string; legacy_number: number | null; name: string }[];
 
-  // 2) 배정(전도인) — 카드별 가장 높은 회차의 배정 전도인
+  // 배정(전도인) — 카드×회차별
   const { data: asgData } = await supabase
     .from("card_assignments")
     .select("card_id, round_no, publishers(name)")
     .range(0, 4999);
-  const asgByCard = new Map<string, { round: number; name: string }>();
+  const pubByCR = new Map<string, string>(); // `${card_id}:${round}` -> 전도인
   type AsgRaw = {
     card_id: string;
     round_no: number;
@@ -343,30 +346,36 @@ export async function buildCircuitReport(start: string, end: string): Promise<Ci
   };
   for (const a of (asgData ?? []) as unknown as AsgRaw[]) {
     const pub = Array.isArray(a.publishers) ? a.publishers[0] : a.publishers;
-    const cur = asgByCard.get(a.card_id);
-    if (pub && (!cur || a.round_no > cur.round)) {
-      asgByCard.set(a.card_id, { round: a.round_no, name: pub.name });
-    }
+    if (pub) pubByCR.set(`${a.card_id}:${a.round_no}`, pub.name);
   }
 
-  // 3) 기간 내 방문 기록 (페이지 처리)
-  const dateByCard = new Map<string, string>(); // card_id -> max visited_date
+  // 기간 내 방문 기록 — 카드×회차별 마지막 날짜
+  const dateByCR = new Map<string, string>(); // `${card_id}:${round}` -> max date
+  const cardsHit = new Set<string>();
+  const cardsHitByRound: Set<string>[] = [new Set(), new Set(), new Set(), new Set()];
   let firstDate: string | null = null;
   let lastDate: string | null = null;
   let from = 0;
   for (;;) {
     const { data, error } = await supabase
       .from("visit_records")
-      .select("visited_date, territory_units!inner(card_id)")
+      .select("visited_date, round_no, territory_units!inner(card_id)")
       .gte("visited_date", start)
       .lte("visited_date", end)
       .range(from, from + 999);
     if (error) throw new Error(error.message);
-    const chunk = (data ?? []) as unknown as { visited_date: string; territory_units: { card_id: string } }[];
+    const chunk = (data ?? []) as unknown as {
+      visited_date: string;
+      round_no: number;
+      territory_units: { card_id: string };
+    }[];
     for (const v of chunk) {
       const cid = v.territory_units.card_id;
+      const key = `${cid}:${v.round_no}`;
       const d = v.visited_date;
-      if (!dateByCard.has(cid) || d > (dateByCard.get(cid) as string)) dateByCard.set(cid, d);
+      if (!dateByCR.has(key) || d > (dateByCR.get(key) as string)) dateByCR.set(key, d);
+      cardsHit.add(cid);
+      if (v.round_no >= 1 && v.round_no <= 4) cardsHitByRound[v.round_no - 1].add(cid);
       if (firstDate === null || d < firstDate) firstDate = d;
       if (lastDate === null || d > lastDate) lastDate = d;
     }
@@ -377,15 +386,18 @@ export async function buildCircuitReport(start: string, end: string): Promise<Ci
   const rows: CircuitRow[] = cards.map((c) => ({
     legacy_number: c.legacy_number,
     name: c.name,
-    publisher: asgByCard.get(c.id)?.name ?? null,
-    completed_date: dateByCard.get(c.id) ?? null,
+    rounds: [1, 2, 3, 4].map((r) => ({
+      publisher: pubByCR.get(`${c.id}:${r}`) ?? null,
+      date: dateByCR.get(`${c.id}:${r}`) ?? null,
+    })),
   }));
 
   return {
     total: cards.length,
     firstDate,
     lastDate,
-    completedCount: [...dateByCard.keys()].length,
+    completedCount: cardsHit.size,
+    completedByRound: cardsHitByRound.map((s) => s.size),
     rows,
   };
 }

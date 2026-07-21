@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { buildCircuitReport } from "../api";
 import type { CircuitReportData } from "../api";
 
@@ -45,15 +45,15 @@ export default function CircuitReport({ onBack }: { onBack: () => void }) {
         import("html2canvas"),
         import("jspdf"),
       ]);
-      // 캡처 시 데스크톱 폭으로 고정해 A4 비율에 맞춤
+      // 회차 칸이 많아 가로(landscape)로. 캡처 폭을 넓게 고정
       const prevW = el.style.width;
-      el.style.width = "780px";
+      el.style.width = "1100px";
       const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
       el.style.width = prevW;
 
-      const pdf = new jspdf.jsPDF("p", "mm", "a4");
-      const pageW = 210;
-      const pageHpx = canvas.width * (297 / 210); // A4 한 장 높이(캔버스 px)
+      const pdf = new jspdf.jsPDF("l", "mm", "a4");
+      const pageW = 297; // A4 가로 폭
+      const pageHpx = canvas.width * (210 / 297); // A4 가로 한 장 높이(캔버스 px)
       let rendered = 0;
       let firstPage = true;
       while (rendered < canvas.height) {
@@ -163,25 +163,46 @@ export default function CircuitReport({ onBack }: { onBack: () => void }) {
                   약 {data.completedCount}개 / 약 {pct.toFixed(1)}% 완료
                 </td>
               </tr>
+              <tr>
+                <th>회차별 완료 카드 수</th>
+                <td>
+                  {data.completedByRound.map((n, i) => `${i + 1}회 ${n}개`).join(" · ")}
+                </td>
+              </tr>
             </tbody>
           </table>
 
           <table className="report-table">
             <thead>
               <tr>
-                <th style={{ width: "12%" }}>구역 번호</th>
-                <th>구역명</th>
-                <th style={{ width: "20%" }}>배정된 전도인</th>
-                <th style={{ width: "18%" }}>완료 날짜</th>
+                <th rowSpan={2} style={{ width: "6%" }}>번호</th>
+                <th rowSpan={2}>구역명</th>
+                {[1, 2, 3, 4].map((r) => (
+                  <th key={r} colSpan={2}>
+                    {r}회차
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {[1, 2, 3, 4].map((r) => (
+                  <Fragment key={r}>
+                    <th style={{ width: "9%" }}>전도인</th>
+                    <th style={{ width: "8%" }}>완료일</th>
+                  </Fragment>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r, i) => (
-                <tr key={i} className={r.completed_date ? "done" : ""}>
-                  <td style={{ textAlign: "center" }}>{r.legacy_number ?? ""}</td>
-                  <td>{r.name}</td>
-                  <td style={{ textAlign: "center" }}>{r.publisher ?? ""}</td>
-                  <td style={{ textAlign: "center" }}>{fmt(r.completed_date)}</td>
+              {data.rows.map((row, i) => (
+                <tr key={i} className={row.rounds.some((c) => c.date) ? "done" : ""}>
+                  <td style={{ textAlign: "center" }}>{row.legacy_number ?? ""}</td>
+                  <td>{row.name}</td>
+                  {row.rounds.map((c, r) => (
+                    <Fragment key={r}>
+                      <td style={{ textAlign: "center" }}>{c.publisher ?? ""}</td>
+                      <td style={{ textAlign: "center" }}>{fmt(c.date)}</td>
+                    </Fragment>
+                  ))}
                 </tr>
               ))}
             </tbody>
