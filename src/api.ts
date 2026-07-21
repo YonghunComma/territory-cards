@@ -209,6 +209,79 @@ export async function resetAllCards(): Promise<void> {
   if (e2) throw new Error(e2.message);
 }
 
+// ---- 구역관리자 전용: 명단(인도자/전도인) 추가·삭제 ----
+
+export async function addConductor(name: string): Promise<void> {
+  const { error } = await supabase.from("conductors").insert({ name: name.trim() });
+  if (error) throw new Error(error.message);
+}
+
+export async function addPublisher(name: string): Promise<void> {
+  const { error } = await supabase.from("publishers").insert({ name: name.trim() });
+  if (error) throw new Error(error.message);
+}
+
+/** 삭제: 참조 기록이 없으면 완전 삭제, 있으면 비활성화(숨김)로 기록 보존 */
+export async function removeConductor(id: string): Promise<"deleted" | "hidden"> {
+  const { error } = await supabase.from("conductors").delete().eq("id", id);
+  if (!error) return "deleted";
+  const { error: e2 } = await supabase.from("conductors").update({ is_active: false }).eq("id", id);
+  if (e2) throw new Error(e2.message);
+  return "hidden";
+}
+
+export async function removePublisher(id: string): Promise<"deleted" | "hidden"> {
+  const { error } = await supabase.from("publishers").delete().eq("id", id);
+  if (!error) return "deleted";
+  const { error: e2 } = await supabase.from("publishers").update({ is_active: false }).eq("id", id);
+  if (e2) throw new Error(e2.message);
+  return "hidden";
+}
+
+// ---- 구역관리자 전용: 새 구역카드 업로드 ----
+
+/** 같은 번호의 카드가 이미 있는지 */
+export async function cardExists(legacyNumber: number): Promise<boolean> {
+  const { data } = await supabase
+    .from("territory_cards")
+    .select("id")
+    .eq("legacy_number", legacyNumber)
+    .limit(1);
+  return (data ?? []).length > 0;
+}
+
+/** 새 카드 + 집들을 추가 (엑셀에서 파싱한 결과) */
+export async function addCard(card: {
+  legacy_number: number | null;
+  name: string;
+  source_file: string;
+  start_point_url: string | null;
+  units: string[]; // 순서대로 번지·호수
+}): Promise<void> {
+  const { data, error } = await supabase
+    .from("territory_cards")
+    .insert({
+      legacy_number: card.legacy_number,
+      name: card.name,
+      source_file: card.source_file,
+      start_point_url: card.start_point_url,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  const cardId = (data as { id: string }).id;
+  const rows = card.units.map((addr, i) => ({
+    card_id: cardId,
+    seq_no: i + 1,
+    address_unit: addr,
+  }));
+  // 500개씩 나눠 삽입
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error: e2 } = await supabase.from("territory_units").insert(rows.slice(i, i + 500));
+    if (e2) throw new Error(e2.message);
+  }
+}
+
 // ---- 구역관리자 전용: 카드의 집 편집 (DB 함수가 번호 재매김까지 처리) ----
 
 export async function adminUpdateUnitAddress(unitId: string, address: string): Promise<void> {

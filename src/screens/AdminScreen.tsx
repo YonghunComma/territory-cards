@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchMemoUnits, resetAllCards, resetCard, setUnitNote } from "../api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  addCard,
+  cardExists,
+  fetchMemoUnits,
+  resetAllCards,
+  resetCard,
+  setUnitNote,
+} from "../api";
 import type { MemoUnit } from "../api";
-import { getCardSummaries } from "../lists";
+import { getCardSummaries, invalidateCardsCache } from "../lists";
+import { parseCardFile } from "../parseCard";
+import type { ParsedCard } from "../parseCard";
 import type { CardSummary } from "../types";
 import { displayNo } from "../types";
 import UnitEditor from "./UnitEditor";
+import NameManager from "./NameManager";
 
 export default function AdminScreen() {
   const [cards, setCards] = useState<CardSummary[]>([]);
@@ -17,6 +27,53 @@ export default function AdminScreen() {
   const [editFocus, setEditFocus] = useState<string | null>(null); // 편집 시 이동할 집 id
   const [resettingAll, setResettingAll] = useState(false);
   const [showAll, setShowAll] = useState(false); // 카드 목록 전체보기
+  const [showNames, setShowNames] = useState(false); // 명단 관리 화면
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ parsed: ParsedCard; file: File; exists: boolean } | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+
+  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = ""; // 같은 파일 다시 선택 가능하게
+    if (!file) return;
+    setError("");
+    setMessage("");
+    try {
+      const parsed = await parseCardFile(file);
+      if (parsed.units.length === 0) {
+        setError("이 파일에서 집(번지·호수)을 찾지 못했습니다. 형식을 확인해 주세요.");
+        return;
+      }
+      const exists = parsed.legacy_number != null && (await cardExists(parsed.legacy_number));
+      setPreview({ parsed, file, exists });
+    } catch (err) {
+      setError("엑셀을 읽지 못했습니다: " + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  async function doUpload() {
+    if (!preview) return;
+    setUploadBusy(true);
+    setError("");
+    try {
+      await addCard({
+        legacy_number: preview.parsed.legacy_number,
+        name: preview.parsed.name,
+        source_file: "upload/" + preview.file.name,
+        start_point_url: preview.parsed.start_point_url,
+        units: preview.parsed.units,
+      });
+      invalidateCardsCache();
+      setMessage(
+        `${preview.parsed.legacy_number ?? "?"}번 ${preview.parsed.name} 카드가 추가되었습니다 (${preview.parsed.units.length}집).`
+      );
+      setPreview(null);
+      loadCards();
+    } catch (e) {
+      setError("업로드 실패: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setUploadBusy(false);
+  }
 
   async function doResetAll() {
     setMessage("");
@@ -133,6 +190,9 @@ export default function AdminScreen() {
   if (editCard) {
     return <UnitEditor card={editCard} onBack={closeEditor} focusUnitId={editFocus} />;
   }
+  if (showNames) {
+    return <NameManager onBack={() => setShowNames(false)} />;
+  }
 
   return (
     <div>
@@ -140,6 +200,22 @@ export default function AdminScreen() {
         <b>편집</b>: 집 주소 수정, 삭제, 사이에 추가 / <b>초기화</b>: 1~4회차
         방문 기록과 배정 삭제 (집 주소·주의사항은 유지)
       </div>
+
+      <div className="row" style={{ marginBottom: 10 }}>
+        <button className="btn-line" style={{ flex: 1 }} onClick={() => setShowNames(true)}>
+          👥 명단 관리
+        </button>
+        <button className="btn-line" style={{ flex: 1 }} onClick={() => fileRef.current?.click()}>
+          ⬆ 구역카드 업로드
+        </button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx"
+        style={{ display: "none" }}
+        onChange={onPickFile}
+      />
 
       <button
         className="btn-danger"
@@ -149,6 +225,38 @@ export default function AdminScreen() {
       >
         {resettingAll ? "전체 초기화 중..." : "🗑 카드 모두 초기화 (전체)"}
       </button>
+
+      {preview && (
+        <div className="modal-back" onClick={() => setPreview(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>구역카드 업로드 확인</h3>
+            <table className="mini" style={{ width: "100%", fontSize: "var(--fs-small)" }}>
+              <tbody>
+                <tr><td style={{ padding: 4 }}>파일</td><td style={{ padding: 4 }}>{preview.file.name}</td></tr>
+                <tr><td style={{ padding: 4 }}>카드 번호</td><td style={{ padding: 4 }}>{preview.parsed.legacy_number ?? "(없음)"}</td></tr>
+                <tr><td style={{ padding: 4 }}>구역명</td><td style={{ padding: 4 }}>{preview.parsed.name}</td></tr>
+                <tr><td style={{ padding: 4 }}>집 수</td><td style={{ padding: 4 }}>{preview.parsed.units.length}집</td></tr>
+                <tr><td style={{ padding: 4 }}>시작점 링크</td><td style={{ padding: 4 }}>{preview.parsed.start_point_url ? "있음" : "없음"}</td></tr>
+              </tbody>
+            </table>
+            {preview.exists && (
+              <div className="error-msg">
+                ⚠ {preview.parsed.legacy_number}번 카드가 이미 있습니다. 그대로 추가하면
+                같은 번호가 2개가 됩니다. 기존 카드를 먼저 정리하거나, 확인 후 진행하세요.
+              </div>
+            )}
+            <div className="notice" style={{ fontSize: "var(--fs-small)" }}>
+              처음 집 3개: {preview.parsed.units.slice(0, 3).map((u) => u.replace(/\n/g, " ")).join(" / ")}
+            </div>
+            <button className="btn-primary" disabled={uploadBusy} onClick={doUpload}>
+              {uploadBusy ? "추가 중..." : "이 카드 추가하기"}
+            </button>
+            <button className="choice-btn" style={{ marginTop: 8 }} onClick={() => setPreview(null)}>
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {memos.length > 0 && (
         <>

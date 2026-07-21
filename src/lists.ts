@@ -36,3 +36,9 @@ export async function getCardSummaries(): Promise<CardSummary[]> {
 export function invalidateCardsCache(): void {
   cardsCache = null;
 }
+
+/** 명단(인도자/전도인)이 바뀌면 캐시를 비움 */
+export function invalidateNameCaches(): void {
+  conductorsCache = null;
+  publishersCache = null;
+}
