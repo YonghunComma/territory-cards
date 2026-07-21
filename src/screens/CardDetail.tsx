@@ -410,7 +410,11 @@ export default function CardDetail({
                   <div
                     key={u.id}
                     className={`unit-row ${visit ? "visited" : ""} ${
-                      caution?.is_do_not_call ? "dnc" : ""
+                      caution?.label === "형제자매댁"
+                        ? "family"
+                        : caution?.is_do_not_call
+                          ? "dnc"
+                          : ""
                     }`}
                   >
                     <button
@@ -434,7 +438,15 @@ export default function CardDetail({
                       </span>
                     </button>
                     {caution && (
-                      <span className={`caution-badge ${caution.is_do_not_call ? "" : "soft"}`}>
+                      <span
+                        className={`caution-badge ${
+                          caution.label === "형제자매댁"
+                            ? "family"
+                            : caution.is_do_not_call
+                              ? ""
+                              : "soft"
+                        }`}
+                      >
                         {caution.label}
                       </span>
                     )}
@@ -458,11 +470,12 @@ export default function CardDetail({
                 key={c.id}
                 className={`choice-btn ${
                   cautionUnit.caution_type_id === c.id ? "selected" : ""
-                } ${c.is_do_not_call ? "danger" : ""}`}
+                } ${
+                  c.label === "형제자매댁" ? "family" : c.is_do_not_call ? "danger" : ""
+                }`}
                 onClick={() => changeCaution(c.id)}
               >
                 {c.label}
-                {c.is_do_not_call ? " (방문 주의)" : ""}
               </button>
             ))}
             <button className="choice-btn" onClick={() => changeCaution(null)}>

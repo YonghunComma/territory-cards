@@ -229,6 +229,9 @@ input, select {
   font-weight: 700;
 }
 .caution-badge.soft { background: #b7791f; }
+.caution-badge.family { background: var(--c-ok); }         /* 형제자매댁 = 초록 */
+.unit-row.family { background: var(--c-ok-bg); border-color: var(--c-ok); }
+.choice-btn.family { color: var(--c-ok); border-color: var(--c-ok); }
 .unit-caution-btn {
   background: #eef1f4;
   color: var(--c-muted);
