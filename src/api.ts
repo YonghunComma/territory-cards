@@ -114,16 +114,20 @@ export async function addVisit(v: {
   publisher_id: string;
   visited_date: string;
 }): Promise<VisitRecord> {
-  const { data, error } = await supabase
-    .from("visit_records")
-    .insert(v)
-    .select("id, unit_id, round_no, conductor_id, publisher_id, visited_date, checked_at")
-    .single();
-  return must(data, error);
+  // DB 함수로 한 건씩만 기록 (테이블 직접 쓰기는 잠금 — 대량 삭제 방지)
+  const { data, error } = await supabase.rpc("visit_check", {
+    p_unit_id: v.unit_id,
+    p_round: v.round_no,
+    p_conductor: v.conductor_id,
+    p_publisher: v.publisher_id,
+    p_date: v.visited_date,
+  });
+  if (error) throw new Error(error.message);
+  return data as VisitRecord;
 }
 
 export async function removeVisit(visitId: string): Promise<void> {
-  const { error } = await supabase.from("visit_records").delete().eq("id", visitId);
+  const { error } = await supabase.rpc("visit_uncheck", { p_visit_id: visitId });
   if (error) throw new Error(error.message);
 }
 
@@ -191,18 +195,20 @@ export async function assignCard(a: {
   publisher_id: string;
   assigned_by: string;
 }): Promise<void> {
-  const { error } = await supabase
-    .from("card_assignments")
-    .upsert(a, { onConflict: "card_id,round_no" });
+  const { error } = await supabase.rpc("assign_card", {
+    p_card_id: a.card_id,
+    p_round: a.round_no,
+    p_publisher: a.publisher_id,
+    p_assigned_by: a.assigned_by,
+  });
   if (error) throw new Error(error.message);
 }
 
 export async function unassignCard(cardId: string, roundNo: number): Promise<void> {
-  const { error } = await supabase
-    .from("card_assignments")
-    .delete()
-    .eq("card_id", cardId)
-    .eq("round_no", roundNo);
+  const { error } = await supabase.rpc("unassign_card", {
+    p_card_id: cardId,
+    p_round: roundNo,
+  });
   if (error) throw new Error(error.message);
 }
 
@@ -211,43 +217,24 @@ export async function resetCard(cardId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** 모든 카드 초기화: 전체 방문 기록과 배정을 삭제 (관리자 화면 전용) */
+/** 모든 카드 초기화 (관리자 전용 DB 함수) */
 export async function resetAllCards(): Promise<void> {
-  const { error: e1 } = await supabase.from("visit_records").delete().gte("round_no", 1);
-  if (e1) throw new Error(e1.message);
-  const { error: e2 } = await supabase.from("card_assignments").delete().gte("round_no", 1);
-  if (e2) throw new Error(e2.message);
+  const { error } = await supabase.rpc("reset_all_cards");
+  if (error) throw new Error(error.message);
 }
 
-/** 전체 카드에서 특정 회차만 초기화 (방문 체크 + 배정 삭제) */
+/** 전체 카드에서 특정 회차만 초기화 (관리자 전용 DB 함수) */
 export async function resetAllRound(round: number): Promise<void> {
-  const { error: e1 } = await supabase.from("visit_records").delete().eq("round_no", round);
-  if (e1) throw new Error(e1.message);
-  const { error: e2 } = await supabase.from("card_assignments").delete().eq("round_no", round);
-  if (e2) throw new Error(e2.message);
+  const { error } = await supabase.rpc("reset_all_round", { p_round: round });
+  if (error) throw new Error(error.message);
 }
 
-/** 한 카드에서 특정 회차만 초기화 (방문 체크 + 배정 삭제) */
+/** 한 카드에서 특정 회차만 초기화 (관리자 전용 DB 함수) */
 export async function resetCardRound(cardId: string, round: number): Promise<void> {
-  const { data: units } = await supabase
-    .from("territory_units")
-    .select("id")
-    .eq("card_id", cardId)
-    .range(0, 999);
-  const unitIds = (units ?? []).map((u) => (u as { id: string }).id);
-  for (let i = 0; i < unitIds.length; i += 100) {
-    const { error } = await supabase
-      .from("visit_records")
-      .delete()
-      .eq("round_no", round)
-      .in("unit_id", unitIds.slice(i, i + 100));
-    if (error) throw new Error(error.message);
-  }
-  const { error } = await supabase
-    .from("card_assignments")
-    .delete()
-    .eq("card_id", cardId)
-    .eq("round_no", round);
+  const { error } = await supabase.rpc("reset_card_round", {
+    p_card_id: cardId,
+    p_round: round,
+  });
   if (error) throw new Error(error.message);
 }
 
