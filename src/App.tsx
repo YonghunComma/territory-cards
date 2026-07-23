@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { CONFIG_OK, EMAIL_TO_ROLE, Role } from "./config";
+import { checkClockSkew, clockSkewMessage, SKEW_WARN_SECONDS } from "./errors";
 import Login from "./screens/Login";
 import PublisherScreen from "./screens/PublisherScreen";
 import ConductorScreen from "./screens/ConductorScreen";
@@ -19,6 +20,8 @@ export default function App() {
     return localStorage.getItem("fontMode") === "big" ? 4 : 2;
   });
 
+  const [clockWarning, setClockWarning] = useState<string | null>(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -28,6 +31,15 @@ export default function App() {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // 앱을 켤 때 기기 시계와 서버 시계 차이를 미리 확인해, 문제가 생기기 전에 경고
+  useEffect(() => {
+    checkClockSkew().then((skew) => {
+      if (skew !== null && Math.abs(skew) >= SKEW_WARN_SECONDS) {
+        setClockWarning(clockSkewMessage(skew));
+      }
+    });
   }, []);
 
   const role: Role = EMAIL_TO_ROLE[session?.user.email ?? ""] ?? "publisher";
@@ -79,6 +91,11 @@ export default function App() {
           <h1>구역카드</h1>
           {fontButtons}
         </header>
+        {clockWarning && (
+          <div className="screen" style={{ paddingBottom: 0 }}>
+            <div className="error-msg" style={{ whiteSpace: "pre-line" }}>{clockWarning}</div>
+          </div>
+        )}
         <Login />
       </>
     );
@@ -96,6 +113,9 @@ export default function App() {
       </header>
 
       <main className="screen">
+        {clockWarning && (
+          <div className="error-msg" style={{ whiteSpace: "pre-line" }}>{clockWarning}</div>
+        )}
         {tab === "publisher" && <PublisherScreen />}
         {tab === "conductor" && showConductor && <ConductorScreen />}
         {tab === "admin" && showAdmin && <AdminScreen />}
