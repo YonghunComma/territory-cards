@@ -63,6 +63,46 @@ export async function letterAssign(
   return (data as number) ?? 0;
 }
 
+export type LetterHistoryRow = {
+  id: string;
+  unit_id: string;
+  written_date: string;
+  created_at: string;
+  publisher_id: string | null;
+  publisher_name: string | null;
+  building: string;
+  ho: string;
+  postal: string | null;
+  seq_no: number;
+};
+
+/** 편지 이력 전체 (주소+전도인 이름 포함). 최근 기록 먼저. */
+export async function fetchLetterHistory(): Promise<LetterHistoryRow[]> {
+  const all: LetterHistoryRow[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("v_letter_history")
+      .select("id, unit_id, written_date, created_at, publisher_id, publisher_name, building, ho, postal, seq_no")
+      .order("created_at", { ascending: false })
+      .order("written_date", { ascending: false })
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    const chunk = (data ?? []) as LetterHistoryRow[];
+    all.push(...chunk);
+    if (chunk.length < 1000) break;
+    from += 1000;
+  }
+  return all;
+}
+
+/** 편지 이력 삭제(배정 취소). 삭제된 건수 반환. */
+export async function letterUnassign(recordIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc("letter_unassign", { p_record_ids: recordIds });
+  if (error) throw new Error(error.message);
+  return (data as number) ?? 0;
+}
+
 // ---- 전체 백업 / 리뉴얼(복원)용 ----
 
 // 백업/복원 시 순서를 보존하기 위한 테이블별 정렬 기준

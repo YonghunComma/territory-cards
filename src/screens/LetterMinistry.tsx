@@ -4,6 +4,7 @@ import type { LetterUnitStatus } from "../api";
 import type { Publisher } from "../types";
 import { matchName } from "../chosung";
 import { friendlyError } from "../errors";
+import LetterHistory from "./LetterHistory";
 
 function today(): string {
   const d = new Date();
@@ -53,6 +54,7 @@ function buildMessage(picked: LetterUnitStatus[], pubName: string): string {
 }
 
 export default function LetterMinistry({ publishers }: { publishers: Publisher[] }) {
+  const [mode, setMode] = useState<"pick" | "history">("pick");
   const [units, setUnits] = useState<LetterUnitStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -137,12 +139,39 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
     setBusy(false);
   }
 
-  if (loading) return <div className="loading">편지봉사 세대를 불러오는 중...</div>;
-
   const message = picked ? buildMessage(picked, pubName || "○○○") : "";
+
+  const subTabs = (
+    <div className="round-tabs">
+      <button className={mode === "pick" ? "active" : ""} onClick={() => setMode("pick")}>
+        집 뽑기
+      </button>
+      <button className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
+        기록 취소
+      </button>
+    </div>
+  );
+
+  if (mode === "history") {
+    return (
+      <div>
+        {subTabs}
+        <LetterHistory publishers={publishers} />
+      </div>
+    );
+  }
+
+  if (loading)
+    return (
+      <div>
+        {subTabs}
+        <div className="loading">편지봉사 세대를 불러오는 중...</div>
+      </div>
+    );
 
   return (
     <div>
+      {subTabs}
       <div className="notice">
         전도인을 고르고 집 수를 정한 뒤 <b>집 뽑기</b>를 누르면, 편지를 오래 못 받은
         집을 <b>건물마다 1집씩</b> 자동으로 골라줍니다. 총 {units.length}세대 ·{" "}
