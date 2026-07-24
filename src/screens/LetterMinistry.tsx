@@ -68,7 +68,12 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
     try {
       setUnits(await fetchLetterUnits());
     } catch (e) {
-      setError(friendlyError(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/letter_units|v_letter_unit_status|schema cache|PGRST205/i.test(msg)) {
+        setError("편지봉사 데이터가 아직 준비되지 않았습니다. 관리자가 DB 설정(SQL)을 실행해야 합니다.");
+      } else {
+        setError(friendlyError(e));
+      }
     }
     setLoading(false);
   }
@@ -88,6 +93,10 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
   function doPick() {
     setDone("");
     setError("");
+    if (units.length === 0) {
+      setError("편지봉사 데이터가 아직 없습니다. 관리자가 DB 설정(SQL)을 실행해야 합니다.");
+      return;
+    }
     const n = Math.max(1, Math.min(20, count || 4));
     const result = pickHouses(units, n);
     if (result.length < n) {
@@ -191,7 +200,7 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
         <button
           className="btn-primary"
           style={{ flex: 2 }}
-          disabled={!publisherId}
+          disabled={!publisherId || units.length === 0}
           onClick={doPick}
         >
           집 뽑기
