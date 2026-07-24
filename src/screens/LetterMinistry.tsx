@@ -5,6 +5,7 @@ import type { Publisher } from "../types";
 import { matchName } from "../chosung";
 import { friendlyError } from "../errors";
 import LetterHistory from "./LetterHistory";
+import LetterStatus from "./LetterStatus";
 
 function today(): string {
   const d = new Date();
@@ -54,7 +55,7 @@ function buildMessage(picked: LetterUnitStatus[], pubName: string): string {
 }
 
 export default function LetterMinistry({ publishers }: { publishers: Publisher[] }) {
-  const [mode, setMode] = useState<"pick" | "history">("pick");
+  const [mode, setMode] = useState<"pick" | "history" | "status">("pick");
   const [units, setUnits] = useState<LetterUnitStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -149,6 +150,9 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
       <button className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
         기록 취소
       </button>
+      <button className={mode === "status" ? "active" : ""} onClick={() => setMode("status")}>
+        전체 현황
+      </button>
     </div>
   );
 
@@ -157,6 +161,15 @@ export default function LetterMinistry({ publishers }: { publishers: Publisher[]
       <div>
         {subTabs}
         <LetterHistory publishers={publishers} />
+      </div>
+    );
+  }
+
+  if (mode === "status") {
+    return (
+      <div>
+        {subTabs}
+        <LetterStatus />
       </div>
     );
   }
