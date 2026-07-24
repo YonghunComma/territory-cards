@@ -1,5 +1,5 @@
 // 전체 DB 백업(엑셀 내보내기) + 전체 리뉴얼(엑셀에서 복원)
-import { adminBulkInsert, adminWipeTerritories, fetchAllRows } from "./api";
+import { adminBulkInsert, adminWipeLetters, adminWipeTerritories, fetchAllRows } from "./api";
 
 type Row = Record<string, unknown>;
 
@@ -12,14 +12,18 @@ const COLS: Record<string, string[]> = {
     "id", "card_number", "legacy_number", "name", "address_summary", "source_file",
     "created_at", "dest_lat", "dest_lng", "dest_label", "start_point_url",
   ],
-  territory_units: ["id", "card_id", "seq_no", "address_unit", "caution_type_id", "note", "created_at"],
+  territory_units: ["id", "card_id", "seq_no", "address_unit", "caution_type_id", "note", "created_at", "letter_zone"],
   card_assignments: ["id", "card_id", "round_no", "publisher_id", "assigned_by", "assigned_at"],
   visit_records: ["id", "unit_id", "round_no", "conductor_id", "publisher_id", "visited_date", "checked_at"],
+  letter_units: ["id", "building", "postal", "ho", "note", "seq_no", "created_at", "source_unit_id"],
+  letter_records: ["id", "unit_id", "written_date", "publisher_id", "created_at"],
 };
 
 const BACKUP_TABLES = Object.keys(COLS);
 // 리뉴얼 때 실제로 지우고 다시 채우는 테이블 (FK 순서). 명단·주의사항은 건드리지 않음.
-const RESTORE_TABLES = ["territory_cards", "territory_units", "card_assignments", "visit_records"];
+// 편지봉사(letter_*)는 파일에 시트가 있을 때만 교체한다.
+const RESTORE_TABLES_TERR = ["territory_cards", "territory_units", "card_assignments", "visit_records"];
+const RESTORE_TABLES_LETTER = ["letter_units", "letter_records"];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function isUuid(v: unknown): boolean {
@@ -71,6 +75,10 @@ export async function restoreFromFile(
   const units = read("territory_units");
   const assignments = read("card_assignments");
   const visits = read("visit_records");
+  // 편지봉사: 파일에 시트가 있을 때만 교체 (없으면 기존 데이터 보존)
+  const hasLetters = wb.Sheets["letter_units"] !== undefined;
+  const letterUnits = read("letter_units");
+  const letterRecords = read("letter_records");
 
   if (cards.length === 0) {
     throw new Error("'territory_cards' 시트가 비어 있습니다. 백업 파일과 같은 양식인지 확인해 주세요.");
@@ -128,19 +136,53 @@ export async function restoreFromFile(
       throw new Error(`방문 기록의 전도인 id(${keyOf(v.publisher_id)})가 현재 명단에 없습니다.`);
   }
 
+  // --- 편지봉사 (파일에 시트가 있을 때만) ---
+  const letterUnitMap = new Map<string, string>();
+  if (hasLetters) {
+    for (const lu of letterUnits) {
+      const orig = keyOf(lu.id);
+      const id = isUuid(orig) ? orig : newId();
+      if (orig) letterUnitMap.set(orig, id);
+      lu.id = id;
+      if (!keyOf(lu.building) || !keyOf(lu.ho))
+        throw new Error("편지봉사 세대(letter_units)에 건물 또는 호수가 비어 있습니다.");
+      // 편봉구역으로 옮긴 원본 구역세대 연결 (없거나 이번 파일에 없으면 null)
+      const src = keyOf(lu.source_unit_id);
+      lu.source_unit_id = src && unitMap.get(src) ? unitMap.get(src) : null;
+    }
+    for (const lr of letterRecords) {
+      lr.id = isUuid(keyOf(lr.id)) ? keyOf(lr.id) : newId();
+      const uk = keyOf(lr.unit_id);
+      const mapped = letterUnitMap.get(uk);
+      if (!mapped) throw new Error(`편지 이력이 참조하는 편지세대 id(${uk})가 letter_units 시트에 없습니다.`);
+      lr.unit_id = mapped;
+      const pk = keyOf(lr.publisher_id);
+      if (pk && !existingPublisherIds.has(pk))
+        throw new Error(`편지 이력의 전도인 id(${pk})가 현재 명단에 없습니다.`);
+      if (!pk) lr.publisher_id = null;
+    }
+  }
+
   // --- 여기까지 통과하면 데이터가 안전하므로 삭제 후 삽입 ---
   const byTable: Record<string, Row[]> = {
     territory_cards: cards,
     territory_units: units,
     card_assignments: assignments,
     visit_records: visits,
+    letter_units: letterUnits,
+    letter_records: letterRecords,
   };
 
   onProgress?.("기존 구역 데이터 삭제 중...");
   await adminWipeTerritories();
+  if (hasLetters) await adminWipeLetters();
+
+  const restoreTables = hasLetters
+    ? [...RESTORE_TABLES_TERR, ...RESTORE_TABLES_LETTER]
+    : RESTORE_TABLES_TERR;
 
   const summary: RestoreSummary = {};
-  for (const t of RESTORE_TABLES) {
+  for (const t of restoreTables) {
     const rows = byTable[t];
     let done = 0;
     for (let i = 0; i < rows.length; i += 500) {

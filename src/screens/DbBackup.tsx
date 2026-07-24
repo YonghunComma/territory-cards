@@ -98,8 +98,10 @@ export default function DbBackup({ onBack }: { onBack: () => void }) {
           전체 리뉴얼 (구역 데이터 교체)
         </div>
         <div className="notice">
-          백업과 <b>같은 양식</b>의 엑셀 파일 하나로 <b>모든 구역카드·집·배정·방문기록을
-          지우고</b> 새로 채웁니다. 인도자·전도인 명단과 주의사항 목록은 그대로 유지됩니다.
+          백업과 <b>같은 양식</b>의 엑셀 파일 하나로 <b>모든 구역카드·집·배정·방문기록</b>을
+          지우고 새로 채웁니다. 파일에 <b>편지봉사 시트</b>가 있으면 편지봉사(세대·이력)도
+          함께 교체하고, 없으면 편지봉사는 그대로 유지됩니다. 인도자·전도인 명단과 주의사항은
+          항상 유지됩니다.
           <br />
           <b style={{ color: "var(--c-danger)" }}>되돌릴 수 없으니 먼저 위에서 백업을 받아 두세요.</b>
         </div>
@@ -140,6 +142,8 @@ function label(table: string): string {
     territory_units: "집",
     card_assignments: "배정",
     visit_records: "방문기록",
+    letter_units: "편지세대",
+    letter_records: "편지이력",
   };
   return m[table] ?? table;
 }

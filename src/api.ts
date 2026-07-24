@@ -165,6 +165,12 @@ export async function adminWipeTerritories(): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** 편지봉사 데이터(세대·편지이력) 전부 삭제 (관리자 전용). */
+export async function adminWipeLetters(): Promise<void> {
+  const { error } = await supabase.rpc("admin_wipe_letters");
+  if (error) throw new Error(error.message);
+}
+
 /** 엑셀에서 읽은 행 묶음을 지정 테이블에 삽입 (관리자 전용). 삽입된 행 수 반환. */
 export async function adminBulkInsert(
   table: string,
