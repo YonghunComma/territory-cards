@@ -6,6 +6,7 @@ import {
   fetchCardStartPoint,
   fetchUnits,
   fetchVisits,
+  removeLetterZone,
   setCardStartPoint,
   setUnitNote,
 } from "../api";
@@ -217,6 +218,12 @@ export default function UnitEditor({
                             <div className="unit-meta">📌 동 제목이 이 집 주소에 저장됨</div>
                           )}
                           {visits > 0 && <div className="unit-meta">방문 기록 {visits}건</div>}
+                          {u.letter_zone === "active" && (
+                            <div className="unit-meta" style={{ color: "#7c3aed", fontWeight: 700 }}>📮 편봉구역 (편지봉사)</div>
+                          )}
+                          {u.letter_zone === "requested" && (
+                            <div className="unit-meta" style={{ color: "#7c3aed" }}>📮 편봉구역 요청됨</div>
+                          )}
                           {u.note && <div className="unit-meta">📝 {u.note}</div>}
                         </span>
                       </button>
@@ -259,6 +266,25 @@ export default function UnitEditor({
                     }}
                   >
                     메모 반영 완료 (삭제)
+                  </button>
+                )}
+                {selectedUnit.letter_zone && (
+                  <button
+                    className="btn-line"
+                    style={{ flexBasis: "100%", borderColor: "#7c3aed", color: "#7c3aed" }}
+                    disabled={busy}
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          `${selectedUnit.address_unit}의 편봉구역을 해제할까요?\n카드에서 다시 체크할 수 있게 되고, 편지봉사에서 제거됩니다.`
+                        )
+                      )
+                        return;
+                      setSelected(null);
+                      await run(() => removeLetterZone(selectedUnit.id));
+                    }}
+                  >
+                    📮 편봉구역 해제 (편지봉사에서 제거)
                   </button>
                 )}
               </div>

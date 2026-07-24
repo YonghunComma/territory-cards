@@ -6,6 +6,7 @@ import {
   fetchUnits,
   fetchVisits,
   removeVisit,
+  requestLetterZone,
   setUnitCaution,
   setUnitNote,
 } from "../api";
@@ -232,6 +233,10 @@ export default function CardDetail({
 
   async function toggleUnit(unit: TerritoryUnit) {
     setError("");
+    if (unit.letter_zone === "active") {
+      setError(`${unit.address_unit}은(는) 편봉구역입니다. 봉사 대신 편지봉사로 진행되며 여기서는 체크할 수 없습니다.`);
+      return;
+    }
     const existing = visitByUnit.get(unit.id);
     if (existing) {
       if (!window.confirm(`${unit.address_unit} 방문 체크를 취소할까요?`)) return;
@@ -280,6 +285,23 @@ export default function CardDetail({
     } catch (e) {
       setError(friendlyError(e));
       setCautionUnit(null);
+    }
+  }
+
+  async function requestZone() {
+    if (!cautionUnit || cautionUnit.letter_zone) return;
+    if (
+      !window.confirm(
+        "이 집을 '편봉구역'으로 요청할까요?\n관리자 확인 후 편지봉사로 이동되며, 승인되면 이 카드에서는 체크할 수 없게 됩니다."
+      )
+    )
+      return;
+    try {
+      await requestLetterZone(cautionUnit.id);
+      setUnits((us) => us.map((u) => (u.id === cautionUnit.id ? { ...u, letter_zone: "requested" } : u)));
+      setCautionUnit({ ...cautionUnit, letter_zone: "requested" });
+    } catch (e) {
+      setError(friendlyError(e));
     }
   }
 
@@ -397,23 +419,27 @@ export default function CardDetail({
               b.items.map(({ unit: u, label, group }) => {
                 const visit = visitByUnit.get(u.id);
                 const caution = u.caution_type_id ? cautionById.get(u.caution_type_id) : null;
+                const zoneActive = u.letter_zone === "active";
+                const zoneReq = u.letter_zone === "requested";
                 return (
                   <div
                     key={u.id}
                     className={`unit-row ${visit ? "visited" : ""} ${
-                      caution?.label === "형제자매댁"
-                        ? "family"
-                        : caution?.is_do_not_call
-                          ? "dnc"
-                          : ""
+                      zoneActive
+                        ? "letter-zone"
+                        : caution?.label === "형제자매댁"
+                          ? "family"
+                          : caution?.is_do_not_call
+                            ? "dnc"
+                            : ""
                     }`}
                   >
                     <button
                       className="unit-main"
-                      disabled={busyUnit === u.id}
+                      disabled={busyUnit === u.id || zoneActive}
                       onClick={() => toggleUnit(u)}
                     >
-                      <span className="unit-check">{visit ? "✓" : ""}</span>
+                      <span className="unit-check">{visit ? "✓" : zoneActive ? "📮" : ""}</span>
                       <span>
                         <span className="unit-addr">
                           {group && <span className="unit-group-prefix">{group}</span>}
@@ -428,7 +454,9 @@ export default function CardDetail({
                         {u.note && <div className="unit-meta">📝 {u.note}</div>}
                       </span>
                     </button>
-                    {caution && (
+                    {zoneActive && <span className="caution-badge letter-zone">편봉구역</span>}
+                    {zoneReq && <span className="caution-badge soft">편봉구역 요청됨</span>}
+                    {caution && !zoneActive && (
                       <span
                         className={`caution-badge ${
                           caution.label === "형제자매댁"
@@ -456,22 +484,43 @@ export default function CardDetail({
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>{cautionUnit.address_unit}</h3>
             <div className="muted" style={{ marginBottom: 6 }}>주의사항 (누르면 바로 저장됩니다)</div>
-            {cautions.map((c) => (
-              <button
-                key={c.id}
-                className={`choice-btn ${
-                  cautionUnit.caution_type_id === c.id ? "selected" : ""
-                } ${
-                  c.label === "형제자매댁" ? "family" : c.is_do_not_call ? "danger" : ""
-                }`}
-                onClick={() => changeCaution(c.id)}
-              >
-                {c.label}
-              </button>
-            ))}
+            {cautions
+              .filter((c) => c.label !== "편봉구역")
+              .map((c) => (
+                <button
+                  key={c.id}
+                  className={`choice-btn ${
+                    cautionUnit.caution_type_id === c.id ? "selected" : ""
+                  } ${
+                    c.label === "형제자매댁" ? "family" : c.is_do_not_call ? "danger" : ""
+                  }`}
+                  onClick={() => changeCaution(c.id)}
+                >
+                  {c.label}
+                </button>
+              ))}
             <button className="choice-btn" onClick={() => changeCaution(null)}>
               주의사항 없음 (해제)
             </button>
+
+            {/* 편봉구역: 관리자에게 요청 */}
+            {cautionUnit.letter_zone === "active" ? (
+              <div className="notice" style={{ marginTop: 10 }}>
+                📮 편봉구역으로 확정된 집입니다. (해제는 관리자만 가능)
+              </div>
+            ) : cautionUnit.letter_zone === "requested" ? (
+              <div className="notice" style={{ marginTop: 10 }}>
+                📮 편봉구역 요청됨 — 관리자 확인을 기다리는 중입니다.
+              </div>
+            ) : (
+              <button
+                className="choice-btn"
+                style={{ marginTop: 10, borderColor: "#7c3aed", color: "#7c3aed" }}
+                onClick={requestZone}
+              >
+                📮 편봉구역으로 요청 (편지봉사로 이동)
+              </button>
+            )}
 
             <div className="field" style={{ marginTop: 14 }}>
               <label>📝 메모 (상호 변경 등 관리자에게 알릴 내용)</label>

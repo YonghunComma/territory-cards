@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  approveLetterZone,
   deleteCard,
+  fetchLetterZoneRequests,
   fetchMemoUnits,
   insertCardAt,
+  rejectLetterZone,
   resetAllCards,
   resetAllRound,
   resetCard,
   resetCardRound,
   setUnitNote,
 } from "../api";
-import type { MemoUnit } from "../api";
+import type { LetterZoneRequest, MemoUnit } from "../api";
 import { getCardSummaries, invalidateCardsCache } from "../lists";
 import { parseCardFile } from "../parseCard";
 import type { ParsedCard } from "../parseCard";
@@ -25,6 +28,8 @@ import { friendlyError } from "../errors";
 export default function AdminScreen() {
   const [cards, setCards] = useState<CardSummary[]>([]);
   const [memos, setMemos] = useState<MemoUnit[]>([]);
+  const [zoneReqs, setZoneReqs] = useState<LetterZoneRequest[]>([]);
+  const [approving, setApproving] = useState<LetterZoneRequest | null>(null);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -145,9 +150,39 @@ export default function AdminScreen() {
 
   async function loadCards() {
     try {
-      const [cs, ms] = await Promise.all([getCardSummaries(), fetchMemoUnits()]);
+      const [cs, ms, zr] = await Promise.all([
+        getCardSummaries(),
+        fetchMemoUnits(),
+        fetchLetterZoneRequests(),
+      ]);
       setCards(cs);
       setMemos(ms);
+      setZoneReqs(zr);
+    } catch (e) {
+      setError(friendlyError(e));
+    }
+  }
+
+  async function doApproveZone(building: string, ho: string) {
+    if (!approving) return;
+    setError("");
+    setMessage("");
+    try {
+      await approveLetterZone(approving.id, building.trim(), ho.trim());
+      setMessage(`편봉구역 승인: ${building} ${ho} — 편지봉사에 추가되었습니다.`);
+      setApproving(null);
+      loadCards();
+    } catch (e) {
+      setError(friendlyError(e));
+    }
+  }
+
+  async function doRejectZone(req: LetterZoneRequest) {
+    if (!window.confirm(`${req.legacy_number ?? "?"}번 카드 "${req.address_unit}"의 편봉구역 요청을 거절할까요?`)) return;
+    setError("");
+    try {
+      await rejectLetterZone(req.id);
+      setZoneReqs((rs) => rs.filter((r) => r.id !== req.id));
     } catch (e) {
       setError(friendlyError(e));
     }
@@ -394,6 +429,43 @@ export default function AdminScreen() {
         </div>
       )}
 
+      {zoneReqs.length > 0 && (
+        <>
+          <div className="section-title">📮 편봉구역 요청 ({zoneReqs.length}건)</div>
+          {zoneReqs.map((r) => (
+            <div key={r.id} className="card-box" style={{ padding: 12, borderColor: "#7c3aed" }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                {r.legacy_number ?? "?"}번 {r.card_name} — {r.address_unit}
+              </div>
+              <div className="row">
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1, background: "#7c3aed", borderColor: "#7c3aed" }}
+                  onClick={() => setApproving(r)}
+                >
+                  승인 (편지봉사 추가)
+                </button>
+                <button
+                  className="btn-line"
+                  style={{ flex: 1, color: "var(--c-danger)", borderColor: "var(--c-danger)" }}
+                  onClick={() => doRejectZone(r)}
+                >
+                  거절
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {approving && (
+        <ApproveZoneModal
+          req={approving}
+          onCancel={() => setApproving(null)}
+          onApprove={doApproveZone}
+        />
+      )}
+
       {memos.length > 0 && (
         <>
           <div className="section-title">📝 봉사자 메모 ({memos.length}건)</div>
@@ -477,6 +549,49 @@ export default function AdminScreen() {
           전체보기 (나머지 {filtered.length - 50}개)
         </button>
       )}
+    </div>
+  );
+}
+
+function ApproveZoneModal({
+  req,
+  onCancel,
+  onApprove,
+}: {
+  req: LetterZoneRequest;
+  onCancel: () => void;
+  onApprove: (building: string, ho: string) => void;
+}) {
+  const [building, setBuilding] = useState(req.card_name);
+  const [ho, setHo] = useState(req.address_unit);
+  return (
+    <div className="modal-back" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>편봉구역 승인 → 편지봉사 추가</h3>
+        <div className="muted" style={{ marginBottom: 8 }}>
+          편지봉사에 넣을 <b>건물 주소</b>와 <b>호수</b>를 확인·수정해 주세요. 승인하면 이 집은
+          구역카드에서 체크할 수 없게 됩니다.
+        </div>
+        <div className="field">
+          <label>건물(주소)</label>
+          <input type="text" value={building} onChange={(e) => setBuilding(e.target.value)} placeholder="예: 대전 유성구 …" />
+        </div>
+        <div className="field">
+          <label>호수</label>
+          <input type="text" value={ho} onChange={(e) => setHo(e.target.value)} placeholder="예: 302" />
+        </div>
+        <button
+          className="btn-primary"
+          style={{ background: "#7c3aed", borderColor: "#7c3aed" }}
+          disabled={!building.trim() || !ho.trim()}
+          onClick={() => onApprove(building, ho)}
+        >
+          승인하고 편지봉사에 추가
+        </button>
+        <button className="choice-btn" style={{ marginTop: 8 }} onClick={onCancel}>
+          취소
+        </button>
+      </div>
     </div>
   );
 }

@@ -247,10 +247,66 @@ export async function fetchCardProgress(): Promise<CardProgress[]> {
 export async function fetchUnits(cardId: string): Promise<TerritoryUnit[]> {
   const { data, error } = await supabase
     .from("territory_units")
-    .select("id, card_id, seq_no, address_unit, caution_type_id, note")
+    .select("id, card_id, seq_no, address_unit, caution_type_id, note, letter_zone")
     .eq("card_id", cardId)
     .order("seq_no");
   return must(data, error);
+}
+
+// ---- 편봉구역 -> 편지봉사 이동 ----
+
+/** 전도인: 편봉구역 요청 (관리자에게 전달) */
+export async function requestLetterZone(unitId: string): Promise<void> {
+  const { error } = await supabase.rpc("request_letter_zone", { p_unit_id: unitId });
+  if (error) throw new Error(error.message);
+}
+
+/** 관리자: 요청 거절 */
+export async function rejectLetterZone(unitId: string): Promise<void> {
+  const { error } = await supabase.rpc("reject_letter_zone", { p_unit_id: unitId });
+  if (error) throw new Error(error.message);
+}
+
+/** 관리자: 승인 -> 편지봉사에 추가 + 카드 잠금 (주소 입력) */
+export async function approveLetterZone(unitId: string, building: string, ho: string): Promise<void> {
+  const { error } = await supabase.rpc("approve_letter_zone", {
+    p_unit_id: unitId,
+    p_building: building,
+    p_ho: ho,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** 관리자: 편봉구역 해제 -> 카드 정상 복귀 + 편지봉사에서 제거 */
+export async function removeLetterZone(unitId: string): Promise<void> {
+  const { error } = await supabase.rpc("remove_letter_zone", { p_unit_id: unitId });
+  if (error) throw new Error(error.message);
+}
+
+export type LetterZoneRequest = {
+  id: string;
+  address_unit: string;
+  card_name: string;
+  legacy_number: number | null;
+};
+
+/** 관리자: 편봉구역 요청('requested') 목록 (카드명 포함) */
+export async function fetchLetterZoneRequests(): Promise<LetterZoneRequest[]> {
+  const { data, error } = await supabase
+    .from("territory_units")
+    .select("id, address_unit, territory_cards!inner(name, legacy_number)")
+    .eq("letter_zone", "requested")
+    .order("card_id");
+  if (error) throw new Error(error.message);
+  type Raw = {
+    id: string;
+    address_unit: string;
+    territory_cards: { name: string; legacy_number: number | null } | { name: string; legacy_number: number | null }[];
+  };
+  return ((data ?? []) as unknown as Raw[]).map((r) => {
+    const c = Array.isArray(r.territory_cards) ? r.territory_cards[0] : r.territory_cards;
+    return { id: r.id, address_unit: r.address_unit, card_name: c?.name ?? "", legacy_number: c?.legacy_number ?? null };
+  });
 }
 
 export async function fetchVisits(cardId: string): Promise<VisitRecord[]> {

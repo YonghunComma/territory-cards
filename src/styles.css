@@ -244,6 +244,9 @@ input, select {
 .caution-badge.family { background: var(--c-ok); }         /* 형제자매댁 = 초록 */
 .unit-row.family { background: var(--c-ok-bg); border-color: var(--c-ok); }
 .choice-btn.family { color: var(--c-ok); border-color: var(--c-ok); }
+.caution-badge.letter-zone { background: #7c3aed; }        /* 편봉구역 = 보라 */
+.unit-row.letter-zone { background: #f3effd; border-color: #7c3aed; }
+.unit-row.letter-zone .unit-main { opacity: 0.7; }
 .unit-caution-btn {
   background: #eef1f4;
   color: var(--c-muted);

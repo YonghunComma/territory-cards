@@ -39,6 +39,7 @@ export interface TerritoryUnit {
   address_unit: string;
   caution_type_id: number | null;
   note: string | null;
+  letter_zone: "requested" | "active" | null;
 }
 
 export interface VisitRecord {
