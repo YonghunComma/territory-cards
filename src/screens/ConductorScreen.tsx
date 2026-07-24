@@ -4,6 +4,8 @@ import { getConductors, getPublishers } from "../lists";
 import type { CardProgress, Conductor, Publisher } from "../types";
 import { displayNo, roundFirstDate, roundPublisher, roundVisited } from "../types";
 import { friendlyError } from "../errors";
+import { matchName } from "../chosung";
+import LetterMinistry from "./LetterMinistry";
 
 type AssignTarget = { card: CardProgress; round: number };
 
@@ -12,26 +14,6 @@ function fmtDate(d: string | null): string {
   if (!d) return "";
   const [y, m, day] = d.split("-");
   return `${y.slice(2)}. ${Number(m)}. ${Number(day)}`;
-}
-
-// 이름 검색: 부분 일치 또는 초성(ㄱㅅㅊ) 일치
-const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
-function chosungOf(s: string): string {
-  let out = "";
-  for (const ch of s) {
-    const code = ch.charCodeAt(0);
-    if (code >= 0xac00 && code <= 0xd7a3) {
-      out += CHO[Math.floor((code - 0xac00) / 588)];
-    } else {
-      out += ch;
-    }
-  }
-  return out;
-}
-function matchName(name: string, q: string): boolean {
-  const query = q.trim();
-  if (!query) return true;
-  return name.includes(query) || chosungOf(name).includes(query);
 }
 
 function rateClass(pct: number): string {
@@ -47,7 +29,7 @@ export default function ConductorScreen() {
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"recommend" | "all">("recommend");
+  const [view, setView] = useState<"recommend" | "all" | "letter">("recommend");
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<AssignTarget | null>(null);
   const [tableRound, setTableRound] = useState<number | null>(null); // 전체 현황 표의 회차
@@ -170,7 +152,12 @@ export default function ConductorScreen() {
         <button className={view === "all" ? "active" : ""} onClick={() => setView("all")}>
           전체 현황
         </button>
+        <button className={view === "letter" ? "active" : ""} onClick={() => setView("letter")}>
+          📮 편지봉사
+        </button>
       </div>
+
+      {view === "letter" && <LetterMinistry publishers={publishers} />}
 
       {view === "recommend" && (
         <div>
