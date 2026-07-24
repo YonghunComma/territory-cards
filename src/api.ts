@@ -76,20 +76,51 @@ export type LetterHistoryRow = {
   seq_no: number;
 };
 
-/** 편지 이력 전체 (주소+전도인 이름 포함). 최근 기록 먼저. */
+type NameRef = { name: string } | { name: string }[] | null;
+type UnitRef =
+  | { building: string; ho: string; postal: string | null; seq_no: number }
+  | { building: string; ho: string; postal: string | null; seq_no: number }[]
+  | null;
+type RawLetterRec = {
+  id: string;
+  unit_id: string;
+  written_date: string;
+  created_at: string;
+  publisher_id: string | null;
+  publishers: NameRef;
+  letter_units: UnitRef;
+};
+
+/** 편지 이력 전체 (주소+전도인 이름 포함, 기존 테이블 직접 조인). 최근 기록 먼저. */
 export async function fetchLetterHistory(): Promise<LetterHistoryRow[]> {
   const all: LetterHistoryRow[] = [];
   let from = 0;
   for (;;) {
     const { data, error } = await supabase
-      .from("v_letter_history")
-      .select("id, unit_id, written_date, created_at, publisher_id, publisher_name, building, ho, postal, seq_no")
+      .from("letter_records")
+      .select(
+        "id, unit_id, written_date, created_at, publisher_id, publishers(name), letter_units(building, ho, postal, seq_no)"
+      )
       .order("created_at", { ascending: false })
-      .order("written_date", { ascending: false })
       .range(from, from + 999);
     if (error) throw new Error(error.message);
-    const chunk = (data ?? []) as LetterHistoryRow[];
-    all.push(...chunk);
+    const chunk = (data ?? []) as unknown as RawLetterRec[];
+    for (const r of chunk) {
+      const pub = Array.isArray(r.publishers) ? r.publishers[0] : r.publishers;
+      const u = Array.isArray(r.letter_units) ? r.letter_units[0] : r.letter_units;
+      all.push({
+        id: r.id,
+        unit_id: r.unit_id,
+        written_date: r.written_date,
+        created_at: r.created_at,
+        publisher_id: r.publisher_id,
+        publisher_name: pub?.name ?? null,
+        building: u?.building ?? "",
+        ho: u?.ho ?? "",
+        postal: u?.postal ?? null,
+        seq_no: u?.seq_no ?? 0,
+      });
+    }
     if (chunk.length < 1000) break;
     from += 1000;
   }
